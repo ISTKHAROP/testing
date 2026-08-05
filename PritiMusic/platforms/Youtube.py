@@ -1,4 +1,3 @@
-
 import asyncio
 import os
 import re
@@ -24,7 +23,7 @@ import traceback
 from PritiMusic import LOGGER
 
 API_URL = "https://teaminflex.xyz"  # Change to your API server URL
-API_KEY = "INFLEX72149028D"
+API_KEY = "INFLEX64711428D"
 
 # ==============================================
 # 🎵 AUDIO DOWNLOAD (Safe JSON + 200 Retry)
