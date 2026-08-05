@@ -1,3 +1,4 @@
+
 import asyncio
 import os
 import re
@@ -23,7 +24,7 @@ import traceback
 from PritiMusic import LOGGER
 
 API_URL = "https://teaminflex.xyz"  # Change to your API server URL
-API_KEY = "INFLEX64711428D"
+API_KEY = "INFLEX72149028D"
 
 # ==============================================
 # 🎵 AUDIO DOWNLOAD (Safe JSON + 200 Retry)
@@ -249,7 +250,9 @@ async def shell_cmd(cmd):
         else:
             return errorz.decode("utf-8")
     return out.decode("utf-8")
-    class YouTubeAPI:
+
+
+class YouTubeAPI:
     def __init__(self):
         self.base = "https://www.youtube.com/watch?v="
         self.regex = r"(?:youtube\.com|youtu\.be)"
