@@ -675,4 +675,7 @@ class Call:
         if getattr(config, "STRING5", None): 
             await self.five.start()
 
+    async def decorators(self):
+        pass
+
 Lucky = Call()
