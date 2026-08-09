@@ -5,14 +5,16 @@ import logging
 from datetime import datetime, timedelta
 from typing import Union
 
+from pyrogram import Client
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.enums import ParseMode
+
 from pytgcalls import PyTgCalls
 from pytgcalls.types import MediaStream, AudioQuality, VideoQuality
 
 import config
 from PritiMusic import LOGGER, YouTube, app
 from PritiMusic.misc import db
-from PritiMusic.core.userbot import userbot  # 🟢 THE REAL FIX: Fetching pre-started Assistants
 from PritiMusic.utils.database import (
     add_active_chat,
     add_active_video_chat,
@@ -28,21 +30,29 @@ from PritiMusic.utils.database import (
 )
 from PritiMusic.utils.autoplay import fetch_autoplay_track, remember_played
 from PritiMusic.utils.stream.queue import put_queue
+from PritiMusic.utils.logger import play_logs
 from PritiMusic.utils.exceptions import AssistantErr
 from PritiMusic.utils.formatters import check_duration, seconds_to_min, speed_converter
 from PritiMusic.utils.inline.play import stream_markup, telegram_markup
 from PritiMusic.utils.stream.autoclear import auto_clean
 from strings import get_string
 from PritiMusic.utils.thumbnails import get_thumb
-from PritiMusic.utils.logger import play_logs
 
+# ==========================================
+# 🛑 GLOBAL ERROR HANDLER & STATE SYNC
+# ==========================================
 def handle_asyncio_exceptions(loop, context):
     msg = context.get("exception", context.get("message"))
     msg_str = str(msg).lower()
+
     expected_sync_events = [
-        "groupcall_forbidden", "setvideocallstatus", "groupcall_invalid", 
-        "no active group call", "group call has already ended"
+        "groupcall_forbidden", 
+        "setvideocallstatus", 
+        "groupcall_invalid", 
+        "no active group call", 
+        "group call has already ended"
     ]
+
     if any(err in msg_str for err in expected_sync_events):
         logging.getLogger("asyncio").info(f"ℹ️ VC State Sync (Harmless): {msg}")
     else:
@@ -76,51 +86,63 @@ async def _clear_(chat_id):
     await remove_active_chat(chat_id)
 
 
-class Call:
+class Call(PyTgCalls):
     def __init__(self):
-        # 🟢 USING PRE-STARTED USERBOTS TO PREVENT C++ CRASHES
-        self.userbot1 = userbot.one
+        # Assistant 1
+        self.userbot1 = Client(
+            name="LuckyAss1",
+            api_id=config.API_ID,
+            api_hash=config.API_HASH,
+            session_string=str(config.STRING1),
+        )
         self.one = PyTgCalls(self.userbot1, cache_duration=100)
 
-        self.userbot2 = userbot.two
-        self.two = PyTgCalls(self.userbot2, cache_duration=100) if self.userbot2 else None
+        # Assistant 2
+        self.two = None
+        if getattr(config, "STRING2", None):
+            self.userbot2 = Client(
+                name="LuckyAss2",
+                api_id=config.API_ID,
+                api_hash=config.API_HASH,
+                session_string=str(config.STRING2),
+            )
+            self.two = PyTgCalls(self.userbot2, cache_duration=100)
 
-        self.userbot3 = userbot.three
-        self.three = PyTgCalls(self.userbot3, cache_duration=100) if self.userbot3 else None
+        # Assistant 3
+        self.three = None
+        if getattr(config, "STRING3", None):
+            self.userbot3 = Client(
+                name="LuckyAss3",
+                api_id=config.API_ID,
+                api_hash=config.API_HASH,
+                session_string=str(config.STRING3),
+            )
+            self.three = PyTgCalls(self.userbot3, cache_duration=100)
 
-        self.userbot4 = userbot.four
-        self.four = PyTgCalls(self.userbot4, cache_duration=100) if self.userbot4 else None
+        # Assistant 4
+        self.four = None
+        if getattr(config, "STRING4", None):
+            self.userbot4 = Client(
+                name="LuckyAss4",
+                api_id=config.API_ID,
+                api_hash=config.API_HASH,
+                session_string=str(config.STRING4),
+            )
+            self.four = PyTgCalls(self.userbot4, cache_duration=100)
 
-        self.userbot5 = userbot.five
-        self.five = PyTgCalls(self.userbot5, cache_duration=100) if self.userbot5 else None
+        # Assistant 5
+        self.five = None
+        if getattr(config, "STRING5", None):
+            self.userbot5 = Client(
+                name="LuckyAss5",
+                api_id=config.API_ID,
+                api_hash=config.API_HASH,
+                session_string=str(config.STRING5),
+            )
+            self.five = PyTgCalls(self.userbot5, cache_duration=100)
 
         self.custom_assistants = {} 
         self.active_clients = {} 
-        
-        # 🟢 THE REAL FIX: Execute the event handlers during init
-        self._setup_event_handlers()
-
-    def _setup_event_handlers(self):
-        clients = [self.one, self.two, self.three, self.four, self.five]
-        for client in clients:
-            if not client:
-                continue
-
-            @client.on_update()
-            async def stream_handler(c, update):
-                try:
-                    c_id = getattr(update, "chat_id", None)
-                    if not c_id: return
-
-                    t_name = type(update).__name__
-                    if "ChatUpdate" in t_name:
-                        status = str(getattr(update, "status", "")).upper()
-                        if "KICKED" in status or "LEFT" in status or "CLOSED" in status:
-                            await self.stop_stream(c_id)
-                    elif "StreamEnd" in t_name or "StreamAudioEnded" in t_name or "StreamVideoEnded" in t_name:
-                        await self.change_stream(c, c_id)
-                except Exception:
-                    pass
 
     async def _safe_change_stream(self, client, chat_id, file_path, video=False, extra_args=""):
         if not video:
@@ -130,15 +152,19 @@ class Call:
 
         try: 
             stream = MediaStream(
-                file_path, audio_parameters=AudioQuality.HIGH, 
-                video_parameters=VideoQuality.HD_720p, ffmpeg_parameters=extra_args
+                file_path, 
+                audio_parameters=AudioQuality.HIGH, 
+                video_parameters=VideoQuality.HD_720p, 
+                ffmpeg_parameters=extra_args
             )
             await client.play(chat_id, stream)
         except Exception as e:
             LOGGER(__name__).warning(f"720p Change Stream failed, auto-switching to 480p: {e}")
             stream = MediaStream(
-                file_path, audio_parameters=AudioQuality.HIGH, 
-                video_parameters=VideoQuality.SD_480p, ffmpeg_parameters=extra_args
+                file_path, 
+                audio_parameters=AudioQuality.HIGH, 
+                video_parameters=VideoQuality.SD_480p, 
+                ffmpeg_parameters=extra_args
             )
             await client.play(chat_id, stream)
 
@@ -148,11 +174,19 @@ class Call:
             return await assistant_to_join.play(chat_id, stream)
 
         try: 
-            stream = MediaStream(file_path, audio_parameters=AudioQuality.HIGH, video_parameters=VideoQuality.HD_720p)
+            stream = MediaStream(
+                file_path, 
+                audio_parameters=AudioQuality.HIGH, 
+                video_parameters=VideoQuality.HD_720p
+            )
             await assistant_to_join.play(chat_id, stream)
         except Exception as e:
             LOGGER(__name__).warning(f"720p Join Call failed, auto-switching to 480p: {e}")
-            stream = MediaStream(file_path, audio_parameters=AudioQuality.HIGH, video_parameters=VideoQuality.SD_480p)
+            stream = MediaStream(
+                file_path, 
+                audio_parameters=AudioQuality.HIGH, 
+                video_parameters=VideoQuality.SD_480p
+            )
             await assistant_to_join.play(chat_id, stream)
 
     async def get_active_clients(self, chat_id):
@@ -195,11 +229,14 @@ class Call:
             if assistant:
                 try: 
                     await assistant.leave_call(chat_id)
+                    LOGGER(__name__).info(f"✅ Assistant left VC successfully in chat {chat_id}.")
                 except Exception as e: 
                     error_msg = str(e).lower()
                     ignore_list = ["no active group call", "already ended", "not in a call", "groupcall_forbidden", "groupcall_invalid"]
-                    if not any(ign in error_msg for ign in ignore_list):
-                        pass
+                    if any(ign in error_msg for ign in ignore_list):
+                        LOGGER(__name__).info(f"ℹ️ Assistant State Sync: VC already closed in {chat_id}.")
+                    else:
+                        LOGGER(__name__).error(f"❌ Assistant failed to leave VC in {chat_id}: {e}")
 
         if chat_id in self.active_clients: 
             del self.active_clients[chat_id]
@@ -216,14 +253,17 @@ class Call:
                 except Exception as e: 
                     error_msg = str(e).lower()
                     ignore_list = ["no active group call", "already ended", "not in a call", "groupcall_forbidden", "groupcall_invalid"]
-                    if not any(ign in error_msg for ign in ignore_list):
-                        pass
+                    if any(ign in error_msg for ign in ignore_list):
+                        LOGGER(__name__).info(f"ℹ️ Assistant State Sync: VC already closed in {chat_id} (Force).")
+                    else:
+                        LOGGER(__name__).error(f"❌ Assistant force-leave failed in {chat_id}: {e}")
 
         if chat_id in self.active_clients: 
             del self.active_clients[chat_id]
 
         try: await _clear_(chat_id)
         except: pass
+
     async def speedup_stream(self, chat_id: int, file_path, speed, playing):
         assistants = await self.get_active_clients(chat_id)
         assistant = assistants[0] if assistants else self.one
@@ -273,7 +313,6 @@ class Call:
             db[chat_id][0]["seconds"] = dur
             db[chat_id][0]["speed_path"] = out
             db[chat_id][0]["speed"] = speed
-
     async def skip_stream(self, chat_id: int, link: str, video: Union[bool, str] = None, image: Union[bool, str] = None, assistant_type=None):
         assistants = await self.get_active_clients(chat_id)
         for assistant in assistants:
@@ -404,10 +443,10 @@ class Call:
                             status = str(getattr(update, "status", "")).upper()
                             if "KICKED" in status or "LEFT" in status or "CLOSED" in status:
                                 await self.stop_stream(c_id)
-                        elif "StreamEnd" in t_name or "StreamAudioEnded" in t_name or "StreamVideoEnded" in t_name:
+                        elif "StreamEnd" in t_name:
                             await self.change_stream(client, c_id)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        LOGGER(__name__).error(f"❌ Clone stream handler exception: {e}")
 
                 await assistant_to_join.start()
                 self.custom_assistants[user_id] = assistant_to_join
@@ -428,6 +467,7 @@ class Call:
         await music_on(chat_id)
         if video: await add_active_video_chat(chat_id)
 
+        # 🟢 TYPERROR FIX APPLIED HERE
         if await is_autoend(chat_id):
             counter[chat_id] = {}
             try:
@@ -437,6 +477,7 @@ class Call:
             except: pass
 
     async def change_stream(self, client, chat_id):
+        # 🟢 ROUTING FIX
         active_assistants = await self.get_active_clients(chat_id)
         client = active_assistants[0] if active_assistants else client
 
@@ -454,6 +495,7 @@ class Call:
             if popped: await auto_clean(popped)
 
             if not db.get(chat_id): 
+                # 🟢 AUTOPLAY CHECK ADDED HERE
                 if popped and await is_autoplay_on(chat_id):
                     started = await self.autoplay_start(
                         chat_id,
@@ -471,7 +513,8 @@ class Call:
                 except: pass
                 return
 
-        except Exception:
+        except Exception as e:
+            LOGGER(__name__).error(f"❌ Error inside change_stream execution framework: {e}")
             await _clear_(chat_id)
             if chat_id in self.active_clients: del self.active_clients[chat_id]
             try: await client.leave_call(chat_id) 
@@ -553,6 +596,7 @@ class Call:
                 img = await get_thumb(videoid, user_id, chat_client) or get_random_img(config.PLAYLIST_IMG_URL)
                 button = stream_markup(_, chat_id)
 
+                # 🟢 MYSTIC DELETE PRESERVED
                 try: await mystic.delete()
                 except: pass
 
@@ -635,18 +679,5 @@ class Call:
         if getattr(config, "STRING4", None): pings.append(self.four.ping)
         if getattr(config, "STRING5", None): pings.append(self.five.ping)
         return pings
-
-    async def start(self):
-        LOGGER(__name__).info("Starting PyTgCalls Client...\n")
-        if getattr(config, "STRING1", None): 
-            await self.one.start()
-        if getattr(config, "STRING2", None): 
-            await self.two.start()
-        if getattr(config, "STRING3", None): 
-            await self.three.start()
-        if getattr(config, "STRING4", None): 
-            await self.four.start()
-        if getattr(config, "STRING5", None): 
-            await self.five.start()
 
 Lucky = Call()
