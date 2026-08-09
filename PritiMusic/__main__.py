@@ -22,19 +22,17 @@ from PritiMusic.plugins.tools.clone import restart_bots
 # ==========================================
 def clear_all_caches():
     LOGGER(__name__).info("🧹 Sweeping old files for Main Bot and Clones...")
-    
-    # Folders jahan clones aur main bot files save karte hain
+
     directories_to_clean = [
         "downloads", 
         "cache",
-        "playback" # Agar speedup stream ka folder hai
+        "playback"
     ]
-    
+
     file_patterns = ["vid_*.mp4", "vid_*.m4a", "vid_*.webm", "*.webm", "*.mp4"]
-    
+
     cleaned_count = 0
-    
-    # 1. Bahar ki files delete karna (Root directory)
+
     for pattern in file_patterns:
         for file in glob.glob(pattern):
             try:
@@ -42,8 +40,7 @@ def clear_all_caches():
                 cleaned_count += 1
             except:
                 pass
-                
-    # 2. Folders ke andar ka kachra saaf karna (Downloads/Cache)
+
     for directory in directories_to_clean:
         if os.path.exists(directory):
             for filename in os.listdir(directory):
@@ -56,13 +53,12 @@ def clear_all_caches():
                         shutil.rmtree(filepath)
                 except Exception as e:
                     LOGGER(__name__).warning(f"Could not remove {filepath}: {e}")
-                    
+
     if cleaned_count > 0:
         LOGGER(__name__).info(f"✅ Successfully swept {cleaned_count} leftover temporary files from all bots.")
     else:
         LOGGER(__name__).info("✅ Server storage is already clean.")
 
-# Execute immediately on startup
 clear_all_caches()
 # ==========================================
 
@@ -96,7 +92,9 @@ async def init():
         exit()
     except:
         pass
-    await Lucky.decorators()
+    
+    # 🟢 ERROR FIXED: Removed 'await Lucky.decorators()' because handlers are now auto-initialized inside call.py
+    
     await restart_bots()
     LOGGER("PritiMusic").info(
         "╔═════ஜ۩۞۩ஜ════╗\n  ☠︎︎𝗠𝗔𝗗𝗘 𝗕𝗬 THE SHIV𝘀☠︎︎\n╚═════ஜ۩۞۩ஜ════╝"
