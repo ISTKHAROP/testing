@@ -5,15 +5,14 @@ import logging
 from datetime import datetime, timedelta
 from typing import Union
 
-from pyrogram import Client
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-
 from pytgcalls import PyTgCalls
-from pytgcalls.types import MediaStream, AudioQuality, VideoQuality, Update
+from pytgcalls.types import MediaStream, AudioQuality, VideoQuality
 
 import config
 from PritiMusic import LOGGER, YouTube, app
 from PritiMusic.misc import db
+from PritiMusic.core.userbot import userbot  # 🟢 THE REAL FIX: Fetching pre-started Assistants
 from PritiMusic.utils.database import (
     add_active_chat,
     add_active_video_chat,
@@ -76,60 +75,29 @@ async def _clear_(chat_id):
     await remove_active_video_chat(chat_id)
     await remove_active_chat(chat_id)
 
+
 class Call:
     def __init__(self):
-        self.userbot1 = Client(
-            name="LuckyAss1",
-            api_id=config.API_ID,
-            api_hash=config.API_HASH,
-            session_string=str(config.STRING1),
-        )
+        # 🟢 USING PRE-STARTED USERBOTS TO PREVENT C++ CRASHES
+        self.userbot1 = userbot.one
         self.one = PyTgCalls(self.userbot1, cache_duration=100)
 
-        self.two = None
-        if getattr(config, "STRING2", None):
-            self.userbot2 = Client(
-                name="LuckyAss2",
-                api_id=config.API_ID,
-                api_hash=config.API_HASH,
-                session_string=str(config.STRING2),
-            )
-            self.two = PyTgCalls(self.userbot2, cache_duration=100)
+        self.userbot2 = userbot.two
+        self.two = PyTgCalls(self.userbot2, cache_duration=100) if self.userbot2 else None
 
-        self.three = None
-        if getattr(config, "STRING3", None):
-            self.userbot3 = Client(
-                name="LuckyAss3",
-                api_id=config.API_ID,
-                api_hash=config.API_HASH,
-                session_string=str(config.STRING3),
-            )
-            self.three = PyTgCalls(self.userbot3, cache_duration=100)
+        self.userbot3 = userbot.three
+        self.three = PyTgCalls(self.userbot3, cache_duration=100) if self.userbot3 else None
 
-        self.four = None
-        if getattr(config, "STRING4", None):
-            self.userbot4 = Client(
-                name="LuckyAss4",
-                api_id=config.API_ID,
-                api_hash=config.API_HASH,
-                session_string=str(config.STRING4),
-            )
-            self.four = PyTgCalls(self.userbot4, cache_duration=100)
+        self.userbot4 = userbot.four
+        self.four = PyTgCalls(self.userbot4, cache_duration=100) if self.userbot4 else None
 
-        self.five = None
-        if getattr(config, "STRING5", None):
-            self.userbot5 = Client(
-                name="LuckyAss5",
-                api_id=config.API_ID,
-                api_hash=config.API_HASH,
-                session_string=str(config.STRING5),
-            )
-            self.five = PyTgCalls(self.userbot5, cache_duration=100)
+        self.userbot5 = userbot.five
+        self.five = PyTgCalls(self.userbot5, cache_duration=100) if self.userbot5 else None
 
         self.custom_assistants = {} 
         self.active_clients = {} 
-
-        # 🟢 THE REAL FIX: Setting up event handlers inside init safely
+        
+        # 🟢 THE REAL FIX: Execute the event handlers during init
         self._setup_event_handlers()
 
     def _setup_event_handlers(self):
@@ -138,31 +106,19 @@ class Call:
             if not client:
                 continue
 
-            @client.on_stream_end()
-            async def stream_end_handler(c, update: Update):
+            @client.on_update()
+            async def stream_handler(c, update):
                 try:
-                    await self.change_stream(c, update.chat_id)
-                except Exception:
-                    pass
+                    c_id = getattr(update, "chat_id", None)
+                    if not c_id: return
 
-            @client.on_closed_voice_chat()
-            async def closed_vc_handler(c, update: Update):
-                try:
-                    await self.stop_stream(update.chat_id)
-                except Exception:
-                    pass
-
-            @client.on_kicked()
-            async def kicked_handler(c, update: Update):
-                try:
-                    await self.stop_stream(update.chat_id)
-                except Exception:
-                    pass
-
-            @client.on_left()
-            async def left_handler(c, update: Update):
-                try:
-                    await self.stop_stream(update.chat_id)
+                    t_name = type(update).__name__
+                    if "ChatUpdate" in t_name:
+                        status = str(getattr(update, "status", "")).upper()
+                        if "KICKED" in status or "LEFT" in status or "CLOSED" in status:
+                            await self.stop_stream(c_id)
+                    elif "StreamEnd" in t_name or "StreamAudioEnded" in t_name or "StreamVideoEnded" in t_name:
+                        await self.change_stream(c, c_id)
                 except Exception:
                     pass
 
@@ -268,7 +224,6 @@ class Call:
 
         try: await _clear_(chat_id)
         except: pass
-
     async def speedup_stream(self, chat_id: int, file_path, speed, playing):
         assistants = await self.get_active_clients(chat_id)
         assistant = assistants[0] if assistants else self.one
@@ -332,6 +287,7 @@ class Call:
         for assistant in assistants:
             try: await self._safe_change_stream(assistant, chat_id, file_path, is_video, extra_args)
             except: pass
+
     async def autoplay_start(self, chat_id: int, original_chat_id: int, seed_title: str, seed_vidid: str = None, client: PyTgCalls = None) -> bool:
         if seed_vidid:
             remember_played(chat_id, seed_vidid)
@@ -362,7 +318,7 @@ class Call:
             file_path, direct = await YouTube.download(track["vidid"], None, videoid=True)
         except Exception:
             return await _fail()
-            
+
         if not file_path:
             return await _fail()
 
@@ -385,7 +341,7 @@ class Call:
 
         active_assistants = await self.get_active_clients(chat_id)
         assistant = client if client else (active_assistants[0] if active_assistants else self.one)
-        
+
         try:
             await self._safe_change_stream(assistant, chat_id, file_path, video=False)
         except Exception:
@@ -437,10 +393,19 @@ class Call:
             else:
                 assistant_to_join = PyTgCalls(userbot, cache_duration=100)
 
-                @assistant_to_join.on_stream_end()
-                async def clone_stream_handler(client, update: Update):
+                @assistant_to_join.on_update()
+                async def clone_stream_handler(client, update):
                     try:
-                        await self.change_stream(client, update.chat_id)
+                        c_id = getattr(update, "chat_id", None)
+                        if not c_id: return
+
+                        t_name = type(update).__name__
+                        if "ChatUpdate" in t_name:
+                            status = str(getattr(update, "status", "")).upper()
+                            if "KICKED" in status or "LEFT" in status or "CLOSED" in status:
+                                await self.stop_stream(c_id)
+                        elif "StreamEnd" in t_name or "StreamAudioEnded" in t_name or "StreamVideoEnded" in t_name:
+                            await self.change_stream(client, c_id)
                     except Exception:
                         pass
 
@@ -683,9 +648,5 @@ class Call:
             await self.four.start()
         if getattr(config, "STRING5", None): 
             await self.five.start()
-
-    async def decorators(self):
-        # Already handled gracefully in _setup_event_handlers inside __init__
-        pass
 
 Lucky = Call()
