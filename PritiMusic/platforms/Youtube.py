@@ -15,11 +15,7 @@ from youtubesearchpython.__future__ import VideosSearch, Playlist
 DOWNLOAD_DIR = "downloads"
 LOGGER = logging.getLogger(__name__)
 
-# 🟢 Primary API (Inflex)
-INFLEX_API_URL = os.environ.get("INFLEX_API_URL", "https://teaminflex.xyz")
-INFLEX_API_KEY = os.environ.get("INFLEX_API_KEY", "INFLEX64711428D")
-
-# 🟢 Secondary API (New Shruti)
+# 🟢 Primary API (Shruti - Promoted after removing Inflex)
 SHRUTI_API_URL = os.environ.get("SHRUTI_API_URL", "https://shrutibots.site")
 SHRUTI_API_KEY = os.environ.get("SHRUTI_API_KEY", "ShrutiBotsmKSBhBaGhKcXoYLNDLMX")
 
@@ -107,12 +103,12 @@ async def ytdl_fallback_download(link: str, download_type: str, title: str = Non
 
     video_format = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
 
+    # Removed cookies.txt
     ydl_opts = {
         'format': video_format if download_type == "video" else 'bestaudio/best', 
         'outtmpl': file_path,
         'quiet': True,
         'no_warnings': True,
-        'cookiefile': 'cookies.txt', 
         'extractor_args': {'youtube': ['player_client=ios,tv_embedded']}, 
         'geo_bypass': True,
         'nocheckcertificate': True,
@@ -233,19 +229,13 @@ async def download_song(link: str, title: str = None) -> str:
             if res and res.get("result"): title = res["result"][0]["title"]
         except Exception: pass
 
-    # 1. Primary API (Inflex)
-    inflex_result = await external_api_download(INFLEX_API_URL, INFLEX_API_KEY, video_id, "audio", title, "Inflex")
-    if inflex_result: return inflex_result
-
-    LOGGER.warning(f"🔴 Inflex API failed for '{title}'. Hopping to Shruti API...")
-
-    # 2. Secondary API (Shruti)
+    # 1. Primary API (Shruti)
     shruti_result = await external_api_download(SHRUTI_API_URL, SHRUTI_API_KEY, video_id, "audio", title, "Shruti")
     if shruti_result: return shruti_result
 
     LOGGER.warning(f"🔴 Shruti API failed for '{title}'. Hopping to yt-dlp...")
 
-    # 3. yt-dlp Fallback
+    # 2. yt-dlp Fallback
     yt_result = await ytdl_fallback_download(link, "audio", title)
     if yt_result: return yt_result
 
@@ -275,19 +265,13 @@ async def download_video(link: str, title: str = None) -> str:
             if res and res.get("result"): title = res["result"][0]["title"]
         except: pass
 
-    # 1. Primary API (Inflex)
-    inflex_result = await external_api_download(INFLEX_API_URL, INFLEX_API_KEY, video_id, "video", title, "Inflex")
-    if inflex_result: return inflex_result
-
-    LOGGER.warning(f"🔴 Inflex API failed for '{title}'. Hopping to Shruti API...")
-
-    # 2. Secondary API (Shruti)
+    # 1. Primary API (Shruti)
     shruti_result = await external_api_download(SHRUTI_API_URL, SHRUTI_API_KEY, video_id, "video", title, "Shruti")
     if shruti_result: return shruti_result
 
     LOGGER.warning(f"🔴 Shruti API failed for '{title}'. Hopping to yt-dlp...")
 
-    # 3. yt-dlp Fallback
+    # 2. yt-dlp Fallback
     return await ytdl_fallback_download(link, "video", title)
 # ----------------- YOUTUBE API CLASS -----------------
 
@@ -338,11 +322,11 @@ class YouTubeAPI:
             pass
 
         try:
+            # Removed cookies.txt
             ydl_opts = {
                 "quiet": True, 
                 "extract_flat": True, 
                 "noplaylist": True,
-                "cookiefile": "cookies.txt",
                 "extractor_args": {"youtube": ["player_client=ios,tv_embedded"]} 
             } 
             ydl = yt_dlp.YoutubeDL(ydl_opts)
@@ -384,6 +368,8 @@ class YouTubeAPI:
             return "0:00"
 
     async def thumbnail(self, link: str, videoid: Union[bool, str] = None):
+        # Capturing raw video id to prevent missing thumbs on clone bots
+        vid_id_str = link if videoid else extract_video_id(link)
         if videoid: link = self.base + link
         if "&" in link: link = link.split("&")[0]
         try:
@@ -391,6 +377,9 @@ class YouTubeAPI:
             for result in (await results.next())["result"]:
                 return result["thumbnails"][0]["url"].split("?")[0]
         except Exception:
+            # Replaced hardcoded telegra.ph broken thumbnail with a dynamic YouTube one
+            if vid_id_str and len(vid_id_str) > 5:
+                return f"https://img.youtube.com/vi/{vid_id_str}/hqdefault.jpg"
             return "https://telegra.ph/file/2e3d368e77c449c287430.jpg"
 
     async def video(self, link: str, videoid: Union[bool, str] = None):
@@ -440,11 +429,11 @@ class YouTubeAPI:
             pass
 
         try:
+            # Removed cookies.txt
             ydl_opts = {
                 "quiet": True, 
                 "extract_flat": True, 
                 "noplaylist": True,
-                "cookiefile": "cookies.txt",
                 "extractor_args": {"youtube": ["player_client=ios,tv_embedded"]} 
             }
             ydl = yt_dlp.YoutubeDL(ydl_opts)
@@ -474,9 +463,9 @@ class YouTubeAPI:
         if videoid: link = self.base + link
         if "&" in link: link = link.split("&")[0]
 
+        # Removed cookies.txt
         ytdl_opts = {
             "quiet": True,
-            "cookiefile": "cookies.txt", 
             "extractor_args": {"youtube": ["player_client=ios,tv_embedded"]},
             "external_downloader": "aria2c",
             "external_downloader_args": [
@@ -511,6 +500,7 @@ class YouTubeAPI:
         return formats_available, link
 
     async def slider(self, link: str, query_type: int, videoid: Union[bool, str] = None):
+        raw_vid_str = link if videoid else extract_video_id(link)
         if videoid: link = self.base + link
         if "&" in link: link = link.split("&")[0]
 
@@ -519,7 +509,9 @@ class YouTubeAPI:
             result = (await a.next()).get("result")
             return result[query_type]["title"], result[query_type]["duration"], result[query_type]["thumbnails"][0]["url"].split("?")[0], result[query_type]["id"]
         except Exception:
-            return "Unknown Title", "0:00", "https://telegra.ph/file/2e3d368e77c449c287430.jpg", "None"
+            # Clone bot fallback fix
+            fallback_thumb = f"https://img.youtube.com/vi/{raw_vid_str}/hqdefault.jpg" if raw_vid_str and len(raw_vid_str) > 5 else "https://telegra.ph/file/2e3d368e77c449c287430.jpg"
+            return "Unknown Title", "0:00", fallback_thumb, "None"
 
     async def download(
         self, link: str, mystic, video: Union[bool, str] = None, videoid: Union[bool, str] = None,
@@ -574,11 +566,11 @@ class YouTubeAPI:
             except Exception: pass 
 
             if not valid_choices:
+                # Removed cookies.txt
                 ytdl_opts = {
                     "quiet": True, 
                     "extract_flat": True, 
                     "noplaylist": True,
-                    "cookiefile": "cookies.txt",
                     "extractor_args": {"youtube": ["player_client=ios,tv_embedded"]} 
                 } 
                 ydl = yt_dlp.YoutubeDL(ytdl_opts)
