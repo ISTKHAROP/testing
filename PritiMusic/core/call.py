@@ -83,7 +83,7 @@ async def _clear_(chat_id):
     await remove_active_chat(chat_id)
 
 
-class Call(PyTgCalls):
+class Call:
     def __init__(self):
         self.userbot1 = Client(
             name="LuckyAss1",
@@ -653,26 +653,26 @@ class Call(PyTgCalls):
                             db[chat_id][0]["markup"] = "stream"
                     except: pass
 
-        async def ping(self):
-            pings = []
-            if getattr(config, "STRING1", None): pings.append(self.one.ping)
-            if getattr(config, "STRING2", None): pings.append(self.two.ping)
-            if getattr(config, "STRING3", None): pings.append(self.three.ping)
-            if getattr(config, "STRING4", None): pings.append(self.four.ping)
-            if getattr(config, "STRING5", None): pings.append(self.five.ping)
-            return pings
+    async def ping(self):
+        pings = []
+        if getattr(config, "STRING1", None): pings.append(self.one.ping)
+        if getattr(config, "STRING2", None): pings.append(self.two.ping)
+        if getattr(config, "STRING3", None): pings.append(self.three.ping)
+        if getattr(config, "STRING4", None): pings.append(self.four.ping)
+        if getattr(config, "STRING5", None): pings.append(self.five.ping)
+        return pings
 
-        async def start(self):
-            LOGGER(__name__).info("Starting PyTgCalls Client...\n")
-            if getattr(config, "STRING1", None): 
-                await self.one.start()
-            if getattr(config, "STRING2", None): 
-                await self.two.start()
-            if getattr(config, "STRING3", None): 
-                await self.three.start()
-            if getattr(config, "STRING4", None): 
-                await self.four.start()
-            if getattr(config, "STRING5", None): 
-                await self.five.start()
+    async def start(self):
+        LOGGER(__name__).info("Starting PyTgCalls Client...\n")
+        if getattr(config, "STRING1", None): 
+            await self.one.start()
+        if getattr(config, "STRING2", None): 
+            await self.two.start()
+        if getattr(config, "STRING3", None): 
+            await self.three.start()
+        if getattr(config, "STRING4", None): 
+            await self.four.start()
+        if getattr(config, "STRING5", None): 
+            await self.five.start()
 
 Lucky = Call()
