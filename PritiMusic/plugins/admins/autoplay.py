@@ -10,18 +10,17 @@ from pyrogram.types import (
 from pyrogram.errors import MessageNotModified
 
 from PritiMusic import app
-from PritiMusic.utils.database.autoplay import (
-    is_autoplay_group,
-    add_autoplay_group,
-    remove_autoplay_group,
+from PritiMusic.utils.database import (
+    is_autoplay_on,
+    autoplay_on,
+    autoplay_off,
 )
-# Assuming AdminActualCheck or a similar decorator exists for callbacks
+
 from PritiMusic.utils.decorators import AdminRightsCheck
 from config import BANNED_USERS
 
 PHOTO_URL = "https://files.catbox.moe/6r97s4.jpg"
 
-# 🔥 PREMIUM EMOJIS LIST 🔥
 PREMIUM_EMOJIS = [
     "5422831825178206894", 
     "5368324170673489600",
@@ -81,7 +80,26 @@ def get_panel(chat_id, enabled):
 )
 @AdminRightsCheck
 async def autoplay_mode(client, message: Message, _, chat_id):
-    enabled = await is_autoplay_group(chat_id)
+    if len(message.command) > 1:
+        query = message.command[1].lower()
+        if query in ["enable", "on"]:
+            await autoplay_on(chat_id)
+            caption, buttons = get_panel(chat_id, True)
+            return await message.reply_photo(
+                photo=PHOTO_URL,
+                caption=caption + "\n**✅ 𝐀ᴜᴛᴏ 𝐏ʟᴀʏ 𝐄ɴᴀʙʟᴇᴅ 𝐒ᴜᴄᴄᴇssғᴜʟʟʏ!**",
+                reply_markup=buttons,
+            )
+        elif query in ["disable", "off"]:
+            await autoplay_off(chat_id)
+            caption, buttons = get_panel(chat_id, False)
+            return await message.reply_photo(
+                photo=PHOTO_URL,
+                caption=caption + "\n**❌ 𝐀ᴜᴛᴏ 𝐏ʟᴀʏ 𝐃ɪsᴀʙʟᴇᴅ 𝐒ᴜᴄᴄᴇssғᴜʟʟʏ!**",
+                reply_markup=buttons,
+            )
+
+    enabled = await is_autoplay_on(chat_id)
     caption, buttons = get_panel(chat_id, enabled)
 
     await message.reply_photo(
@@ -94,13 +112,12 @@ async def autoplay_mode(client, message: Message, _, chat_id):
 @app.on_callback_query(filters.regex("^AUTOPLAY_ENABLE") & ~BANNED_USERS)
 async def autoplay_enable(_, query: CallbackQuery):
     chat_id = int(query.data.split("|")[1])
-    
-    # Corrected Pyrogram v2+ admin check verification
+
     member = await app.get_chat_member(chat_id, query.from_user.id)
     if member.status not in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]:
         return await query.answer("❌ You must be an admin to change this setting!", show_alert=True)
 
-    await add_autoplay_group(chat_id)
+    await autoplay_on(chat_id)
     caption, buttons = get_panel(chat_id, True)
 
     try:
@@ -117,13 +134,12 @@ async def autoplay_enable(_, query: CallbackQuery):
 @app.on_callback_query(filters.regex("^AUTOPLAY_DISABLE") & ~BANNED_USERS)
 async def autoplay_disable(_, query: CallbackQuery):
     chat_id = int(query.data.split("|")[1])
-    
-    # Corrected Pyrogram v2+ admin check verification
+
     member = await app.get_chat_member(chat_id, query.from_user.id)
     if member.status not in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]:
         return await query.answer("❌ You must be an admin to change this setting!", show_alert=True)
 
-    await remove_autoplay_group(chat_id)
+    await autoplay_off(chat_id)
     caption, buttons = get_panel(chat_id, False)
 
     try:
