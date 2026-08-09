@@ -10,7 +10,7 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.enums import ParseMode
 
 from pytgcalls import PyTgCalls
-from pytgcalls.types import MediaStream, AudioQuality, VideoQuality
+from pytgcalls.types import MediaStream, AudioQuality, VideoQuality, Update
 
 import config
 from PritiMusic import LOGGER, YouTube, app
@@ -676,6 +676,37 @@ class Call:
             await self.five.start()
 
     async def decorators(self):
-        pass
+        clients = [self.one, self.two, self.three, self.four, self.five]
+        for client in clients:
+            if not client:
+                continue
+
+            @client.on_stream_end()
+            async def stream_end_handler(c, update: Update):
+                try:
+                    await self.change_stream(c, update.chat_id)
+                except Exception:
+                    pass
+
+            @client.on_closed_voice_chat()
+            async def closed_vc_handler(c, update: Update):
+                try:
+                    await self.stop_stream(update.chat_id)
+                except Exception:
+                    pass
+
+            @client.on_kicked()
+            async def kicked_handler(c, update: Update):
+                try:
+                    await self.stop_stream(update.chat_id)
+                except Exception:
+                    pass
+
+            @client.on_left()
+            async def left_handler(c, update: Update):
+                try:
+                    await self.stop_stream(update.chat_id)
+                except Exception:
+                    pass
 
 Lucky = Call()
