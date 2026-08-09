@@ -85,8 +85,7 @@ async def _clear_(chat_id):
     await remove_active_video_chat(chat_id)
     await remove_active_chat(chat_id)
 
-
-class Call(PyTgCalls):
+class Call:
     def __init__(self):
         # Assistant 1
         self.userbot1 = Client(
@@ -143,6 +142,29 @@ class Call(PyTgCalls):
 
         self.custom_assistants = {} 
         self.active_clients = {} 
+        self._setup_event_handlers()
+
+    def _setup_event_handlers(self):
+        clients = [self.one, self.two, self.three, self.four, self.five]
+        for client in clients:
+            if not client:
+                continue
+
+            @client.on_update()
+            async def stream_handler(c, update):
+                try:
+                    c_id = getattr(update, "chat_id", None)
+                    if not c_id: return
+
+                    t_name = type(update).__name__
+                    if "ChatUpdate" in t_name:
+                        status = str(getattr(update, "status", "")).upper()
+                        if "KICKED" in status or "LEFT" in status or "CLOSED" in status:
+                            await self.stop_stream(c_id)
+                    elif "StreamEnd" in t_name or "StreamAudioEnded" in t_name or "StreamVideoEnded" in t_name:
+                        await self.change_stream(c, c_id)
+                except Exception:
+                    pass
 
     async def _safe_change_stream(self, client, chat_id, file_path, video=False, extra_args=""):
         if not video:
@@ -443,7 +465,7 @@ class Call(PyTgCalls):
                             status = str(getattr(update, "status", "")).upper()
                             if "KICKED" in status or "LEFT" in status or "CLOSED" in status:
                                 await self.stop_stream(c_id)
-                        elif "StreamEnd" in t_name:
+                        elif "StreamEnd" in t_name or "StreamAudioEnded" in t_name or "StreamVideoEnded" in t_name:
                             await self.change_stream(client, c_id)
                     except Exception as e:
                         LOGGER(__name__).error(f"❌ Clone stream handler exception: {e}")
@@ -467,7 +489,6 @@ class Call(PyTgCalls):
         await music_on(chat_id)
         if video: await add_active_video_chat(chat_id)
 
-        # 🟢 TYPERROR FIX APPLIED HERE
         if await is_autoend(chat_id):
             counter[chat_id] = {}
             try:
@@ -477,7 +498,6 @@ class Call(PyTgCalls):
             except: pass
 
     async def change_stream(self, client, chat_id):
-        # 🟢 ROUTING FIX
         active_assistants = await self.get_active_clients(chat_id)
         client = active_assistants[0] if active_assistants else client
 
@@ -495,7 +515,6 @@ class Call(PyTgCalls):
             if popped: await auto_clean(popped)
 
             if not db.get(chat_id): 
-                # 🟢 AUTOPLAY CHECK ADDED HERE
                 if popped and await is_autoplay_on(chat_id):
                     started = await self.autoplay_start(
                         chat_id,
@@ -596,7 +615,6 @@ class Call(PyTgCalls):
                 img = await get_thumb(videoid, user_id, chat_client) or get_random_img(config.PLAYLIST_IMG_URL)
                 button = stream_markup(_, chat_id)
 
-                # 🟢 MYSTIC DELETE PRESERVED
                 try: await mystic.delete()
                 except: pass
 
@@ -679,5 +697,18 @@ class Call(PyTgCalls):
         if getattr(config, "STRING4", None): pings.append(self.four.ping)
         if getattr(config, "STRING5", None): pings.append(self.five.ping)
         return pings
+
+    async def start(self):
+        LOGGER(__name__).info("Starting PyTgCalls Client...\n")
+        if getattr(config, "STRING1", None): 
+            await self.one.start()
+        if getattr(config, "STRING2", None): 
+            await self.two.start()
+        if getattr(config, "STRING3", None): 
+            await self.three.start()
+        if getattr(config, "STRING4", None): 
+            await self.four.start()
+        if getattr(config, "STRING5", None): 
+            await self.five.start()
 
 Lucky = Call()
