@@ -4,7 +4,6 @@ import math
 from pyrogram.types import CallbackQuery, InputMediaPhoto, InputMediaVideo, InlineKeyboardButton, InlineKeyboardMarkup
 from pyrogram import filters
 from pyrogram.errors import WebpageMediaEmpty
-# Import ButtonStyle for dynamic colors (requires a fork like Kurigram)
 from pyrogram.enums import ButtonStyle 
 
 from PritiMusic import YouTube, app
@@ -12,10 +11,9 @@ from PritiMusic.core.call import Lucky
 from PritiMusic.misc import SUDOERS, db
 from PritiMusic.utils.database import (
     get_active_chats, get_lang, get_upvote_count, is_active_chat,
-    is_music_playing, is_nonadmin_chat, music_off, music_on, set_loop, get_assistant
+    is_music_playing, is_nonadmin_chat, music_off, music_on, set_loop, get_assistant,
+    is_autoplay_on, autoplay_on, autoplay_off
 )
-# ✅ Added Autoplay database imports
-from PritiMusic.utils.database.autoplay import is_autoplay_group, add_autoplay_group, remove_autoplay_group
 
 from PritiMusic.utils.decorators.language import languageCB
 from PritiMusic.utils.formatters import seconds_to_min
@@ -33,13 +31,11 @@ from PritiMusic.utils.inline.start import private_panel
 checker = {}
 upvoters = {}
 
-# 🎨 Dynamic Color Generator
 def get_style_map():
     styles = [ButtonStyle.PRIMARY, ButtonStyle.SUCCESS, ButtonStyle.DANGER]
     random.shuffle(styles)
     return {1: styles[0], 2: styles[1], 3: styles[2], 4: styles[0]}
 
-# --- BACK BUTTON HANDLER ---
 @app.on_callback_query(filters.regex("settingsback_helper") & ~BANNED_USERS)
 @languageCB
 async def settings_back_helper(client, CallbackQuery, _):
@@ -61,7 +57,6 @@ async def settings_back_helper(client, CallbackQuery, _):
         reply_markup=InlineKeyboardMarkup(private_panel(_))
     )
 
-# --- CLONE PAGE ---
 @app.on_callback_query(filters.regex("clone_page") & ~BANNED_USERS)
 @languageCB
 async def clone_page_cb(client, CallbackQuery, _):
@@ -88,7 +83,6 @@ async def clone_page_cb(client, CallbackQuery, _):
         )
     )
 
-# --- SUPPORT PAGE ---
 @app.on_callback_query(filters.regex("support_page") & ~BANNED_USERS)
 @languageCB
 async def support_page_cb(client, CallbackQuery, _):
@@ -121,7 +115,6 @@ async def support_page_cb(client, CallbackQuery, _):
         reply_markup=InlineKeyboardMarkup(custom_support_buttons)
     )
 
-# --- SOURCE PAGE ---
 @app.on_callback_query(filters.regex("gib_source"))
 async def gib_repo_callback(_, callback_query):
     try:
@@ -154,7 +147,6 @@ async def unban_assistant(_, callback: CallbackQuery):
     except Exception:
         await callback.answer("ғᴧɪʟєᴅ ᴛσ υηʙᴧη. ɢɪᴠє ϻє ᴧᴅϻɪη ᴘєʀϻɪssɪσηs.", show_alert=True)
 
-# --- ADMIN COMMANDS ---
 @app.on_callback_query(filters.regex("ADMIN") & ~BANNED_USERS)
 @languageCB
 async def del_back_playlist(client, CallbackQuery, _):
@@ -241,25 +233,22 @@ async def del_back_playlist(client, CallbackQuery, _):
         await set_loop(chat_id, 0)
         await CallbackQuery.message.reply_text(_["admin_5"].format(mention), reply_markup=close_markup(_))
         await CallbackQuery.message.delete()
-
-    # ✅ AUTOPLAY BUTTON LOGIC ADDED HERE
     elif command == "Autoplay":
-        state = await is_autoplay_group(chat_id)
+        state = await is_autoplay_on(chat_id)
         if state:
-            await remove_autoplay_group(chat_id)
+            await autoplay_off(chat_id)
             await CallbackQuery.answer("🔴 ᴧυᴛσᴘʟᴧʏ ᴅɪsᴧʙʟєᴅ!", show_alert=True)
             await CallbackQuery.message.reply_text(
                 f"<blockquote><b>🔴 🎧 ᴧυᴛσᴘʟᴧʏ sʏsᴛєϻ</b>\n\n<b>ᴧυᴛσᴘʟᴧʏ ғσʀ ᴛʜɪs ɢʀσυᴘ ɪs ησᴡ ᴅɪsᴧʙʟєᴅ 🔴.</b>\n└ <b>ʙʏ :</b> {mention}</blockquote>",
                  reply_markup=close_markup(_)
             )
         else:
-            await add_autoplay_group(chat_id)
+            await autoplay_on(chat_id)
             await CallbackQuery.answer("🟢 ᴧυᴛσᴘʟᴧʏ єηᴧʙʟєᴅ!", show_alert=True)
             await CallbackQuery.message.reply_text(
                 f"<blockquote><b>🟢 🎧 ᴧυᴛσᴘʟᴧʏ sʏsᴛєϻ</b>\n\n<b>ᴧυᴛσᴘʟᴧʏ ғσʀ ᴛʜɪs ɢʀσυᴘ ɪs ησᴡ єηᴧʙʟєᴅ 🟢.</b>\n└ <b>ʙʏ :</b> {mention}</blockquote>",
                   reply_markup=close_markup(_)
             )
-
     elif command == "Skip" or command == "Replay":
         check = db.get(chat_id)
         if not check or len(check) == 0:
@@ -344,8 +333,6 @@ async def markup_timer():
 
 asyncio.create_task(markup_timer()) 
 
-# --- YAHAN SE FILE ID NIKALNE WALA CODE START HOTA HAI ---
 @app.on_message(filters.video & filters.private)
 async def get_my_own_file_id(client, message):
     await message.reply_text(f"<blockquote><b>🎨 ϻєʀᴧ ᴠɪᴅєσ ғɪʟє ɪᴅ (ɪsᴋσ ᴄσᴘʏ ᴋᴧʀσ) :</b>\n<code>{message.video.file_id}</code></blockquote>")
-        
