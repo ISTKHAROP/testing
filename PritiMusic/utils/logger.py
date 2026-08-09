@@ -3,12 +3,10 @@ from pyrogram.enums import ParseMode, ButtonStyle
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ChatMemberUpdated
 import random
 
-# Make sure config se LOGGER_2_ID import ho raha hai
 from PritiMusic import app
 from PritiMusic.utils.database import is_on_off
 from config import LOGGER_ID, LOGGER_2_ID
 
-# 🔥 PREMIUM EMOJIS LIST 🔥
 PREMIUM_EMOJIS = [
     "5422831825178206894", 
     "5368324170673489600",
@@ -16,9 +14,6 @@ PREMIUM_EMOJIS = [
     "5206380668048496464"
 ]
 
-# ====================================================
-# HELPER FUNCTION: To Fetch Group Owner
-# ====================================================
 async def get_owner(client, chat_id):
     try:
         async for member in client.get_chat_members(chat_id, filter=enums.ChatMembersFilter.ADMINISTRATORS):
@@ -28,10 +23,6 @@ async def get_owner(client, chat_id):
         pass
     return "Unknown"
 
-
-# ====================================================
-# PLAY LOGS
-# ====================================================
 async def play_logs(message, streamtype):
     if await is_on_off(2):
         try:
@@ -43,7 +34,7 @@ async def play_logs(message, streamtype):
             members_count = await app.get_chat_members_count(message.chat.id)
         except:
             members_count = "Unknown"
-            
+
         owner = await get_owner(app, message.chat.id)
 
         chat_link = None
@@ -66,10 +57,9 @@ async def play_logs(message, streamtype):
 """
         buttons = []
         if chat_link:
-            buttons.append([InlineKeyboardButton("ɢʀᴏᴜᴘ ʟɪɴᴋ", url=chat_link, style=ButtonStyle.PRIMARY, icon_custom_emoji_id=random.choice(PREMIUM_EMOJIS))])
-        buttons.append([InlineKeyboardButton("sᴜᴘᴘᴏʀᴛ", url="https://t.me/betabot_support")])
+            buttons.append([InlineKeyboardButton("ᴄʜᴀᴛ-ʟɪɴᴋ", url=chat_link, style=ButtonStyle.PRIMARY, icon_custom_emoji_id=random.choice(PREMIUM_EMOJIS))])
         
-        reply_markup = InlineKeyboardMarkup(buttons)
+        reply_markup = InlineKeyboardMarkup(buttons) if buttons else None
 
         if message.chat.id != LOGGER_ID:
             try:
@@ -84,10 +74,6 @@ async def play_logs(message, streamtype):
                 pass
         return
 
-
-# ====================================================
-# CLONE BOT PLAY LOGS
-# ====================================================
 async def clone_bot_logs(client, message, bot_mention, clone_logger_id, streamtype):
     bot = await client.get_me()
     try:
@@ -103,28 +89,23 @@ async def clone_bot_logs(client, message, bot_mention, clone_logger_id, streamty
 <b>• ǫᴜᴇʀʏ :</b> {query}
 <b>• ᴄʜᴀᴛ :</b> {message.chat.title} [<code>{message.chat.id}</code>]
 """     
-        owner_reply_markup = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("sᴜᴘᴘᴏʀᴛ", url="https://t.me/betabot_support")]]
-        )
-
         if message.chat.id != int(clone_logger_id):
             try:
                 await client.send_message(
                     chat_id=int(clone_logger_id),
                     text=owner_log_text,
                     parse_mode=ParseMode.HTML,
-                    disable_web_page_preview=True,
-                    reply_markup=owner_reply_markup
+                    disable_web_page_preview=True
                 )
-            except Exception as e:
-                print(f"[ERROR] Sending to Clone Owner Log Failed: {e}")
+            except:
+                pass
 
     if LOGGER_ID:
         try:
             members_count = await client.get_chat_members_count(message.chat.id)
         except:
             members_count = "Unknown"
-            
+
         owner = await get_owner(client, message.chat.id)
 
         chat_link = None
@@ -147,10 +128,9 @@ async def clone_bot_logs(client, message, bot_mention, clone_logger_id, streamty
 """
         buttons = []
         if chat_link:
-            buttons.append([InlineKeyboardButton("ɢʀᴏᴜᴘ ʟɪɴᴋ", url=chat_link, style=ButtonStyle.PRIMARY, icon_custom_emoji_id=random.choice(PREMIUM_EMOJIS))])
-        buttons.append([InlineKeyboardButton("sᴜᴘᴘᴏʀᴛ", url="https://t.me/betabot_support")])
+            buttons.append([InlineKeyboardButton("ᴄʜᴀᴛ-ʟɪɴᴋ", url=chat_link, style=ButtonStyle.PRIMARY, icon_custom_emoji_id=random.choice(PREMIUM_EMOJIS))])
         
-        reply_markup = InlineKeyboardMarkup(buttons)
+        reply_markup = InlineKeyboardMarkup(buttons) if buttons else None
 
         try:
             await app.send_message(
@@ -160,32 +140,26 @@ async def clone_bot_logs(client, message, bot_mention, clone_logger_id, streamty
                 disable_web_page_preview=True,
                 reply_markup=reply_markup
             )
-        except Exception as e:
-            print(f"[ERROR] Sending to Main Admin Log Failed: {e}")
+        except:
+            pass
 
-
-# ====================================================
-# AUTO GROUP ADD/REMOVE EVENT LOGGER
-# ====================================================
 @app.on_chat_member_updated(filters.group, group=1)
 async def auto_group_logger(client: Client, message: ChatMemberUpdated):
     try:
         bot = await client.get_me()
-        
-        # Sirf tabhi trigger hoga jab bot khud add/remove ho
+
         if not message.new_chat_member or message.new_chat_member.user.id != bot.id:
             return
 
-        # Main Bot vs Clone Bot Check
         is_clone = False if bot.id == app.id else True
         target_logger = LOGGER_2_ID if is_clone else LOGGER_ID
-        
+
         if not target_logger:
             return
 
         chat = message.chat
         action_by = message.from_user
-        
+
         try:
             members_count = await client.get_chat_members_count(chat.id)
         except:
@@ -194,11 +168,9 @@ async def auto_group_logger(client: Client, message: ChatMemberUpdated):
         owner = await get_owner(client, chat.id)
         action_by_mention = action_by.mention if action_by else "<b>Unknown User</b>"
         bot_details = f"@{bot.username} (Clone)" if is_clone else app.mention
-        
-        # Image URL
+
         log_image = "https://files.catbox.moe/10zwqs.jpg"
 
-        # Group Link Fetching Logic for Button
         chat_link = None
         if chat.username:
             chat_link = f"https://t.me/{chat.username}"
@@ -208,18 +180,15 @@ async def auto_group_logger(client: Client, message: ChatMemberUpdated):
             except:
                 pass
 
-        # Button Setup
         reply_markup = None
         if chat_link:
             buttons = [
-                [InlineKeyboardButton("🔗 ɢʀᴏᴜᴘ ʟɪɴᴋ", url=chat_link)]
+                [InlineKeyboardButton("ᴄʜᴀᴛ-ʟɪɴᴋ", url=chat_link)]
             ]
             reply_markup = InlineKeyboardMarkup(buttons)
 
-        # 🟢 CONDITION 1: Added to Group
         if message.new_chat_member.status in [enums.ChatMemberStatus.MEMBER, enums.ChatMemberStatus.ADMINISTRATOR]:
             log_caption = f"""
-#Added
 <blockquote><b>✅ ʙᴏᴛ ᴀᴅᴅᴇᴅ ᴛᴏ ɢʀᴏᴜᴘ</b>
 
 <b>• ʙᴏᴛ : {bot_details}</b>
@@ -236,10 +205,8 @@ async def auto_group_logger(client: Client, message: ChatMemberUpdated):
                 reply_markup=reply_markup
             )
 
-        # 🔴 CONDITION 2: Removed from Group
         elif message.new_chat_member.status in [enums.ChatMemberStatus.BANNED, enums.ChatMemberStatus.LEFT]:
             log_caption = f"""
-#Removed
 <blockquote><b>❌ ʙᴏᴛ ʀᴇᴍᴏᴠᴇᴅ ꜰʀᴏᴍ ɢʀᴏᴜᴘ</b>
 
 <b>• ʙᴏᴛ : {bot_details}</b>
@@ -256,17 +223,13 @@ async def auto_group_logger(client: Client, message: ChatMemberUpdated):
                 reply_markup=reply_markup
             )
 
-    except Exception as e:
-        print(f"[ERROR] Auto Group Logger Failed: {e}")
+    except Exception:
+        pass
 
-
-# ====================================================
-# AUTOPLAY LOGS 
-# ====================================================
 async def autoplay_log(client, chat_id, query, vibe="Unknown", is_clone=False, clone_logger_id=None):
     if not await is_on_off(2):
         return
-        
+
     try:
         bot = await client.get_me()
         bot_mention = bot.mention
@@ -285,7 +248,7 @@ async def autoplay_log(client, chat_id, query, vibe="Unknown", is_clone=False, c
         members_count = await client.get_chat_members_count(chat_id)
     except:
         members_count = "Unknown"
-        
+
     owner = await get_owner(client, chat_id)
 
     chat_link = None
@@ -306,21 +269,16 @@ async def autoplay_log(client, chat_id, query, vibe="Unknown", is_clone=False, c
 <b>• ᴠɪʙᴇ :</b> {vibe}
 <b>• ᴄʜᴀᴛ :</b> {chat_title} [<code>{chat_id}</code>]
 """
-        owner_reply_markup = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("sᴜᴘᴘᴏʀᴛ", url="https://t.me/betabot_support")]]
-        )
-
         if chat_id != int(clone_logger_id):
             try:
                 await client.send_message(
                     chat_id=int(clone_logger_id),
                     text=owner_autoplay_text,
                     parse_mode=ParseMode.HTML,
-                    disable_web_page_preview=True,
-                    reply_markup=owner_reply_markup
+                    disable_web_page_preview=True
                 )
-            except Exception as e:
-                print(f"[ERROR] Sending to Clone Owner Autoplay Log Failed: {e}")
+            except:
+                pass
 
     if is_clone:
         header_text = f"🤖 <b>ᴄʟᴏɴᴇ ᴀᴜᴛᴏᴘʟᴀʏ ʟᴏɢ : @{bot.username}</b>"
@@ -339,10 +297,9 @@ async def autoplay_log(client, chat_id, query, vibe="Unknown", is_clone=False, c
 """
     buttons = []
     if chat_link:
-        buttons.append([InlineKeyboardButton("ɢʀᴏᴜᴘ ʟɪɴᴋ", url=chat_link, style=ButtonStyle.SUCCESS, icon_custom_emoji_id=random.choice(PREMIUM_EMOJIS))])
-    buttons.append([InlineKeyboardButton("sᴜᴘᴘᴏʀᴛ", url="https://t.me/betabot_support")])
+        buttons.append([InlineKeyboardButton("ᴄʜᴀᴛ-ʟɪɴᴋ", url=chat_link, style=ButtonStyle.SUCCESS, icon_custom_emoji_id=random.choice(PREMIUM_EMOJIS))])
     
-    reply_markup = InlineKeyboardMarkup(buttons)
+    reply_markup = InlineKeyboardMarkup(buttons) if buttons else None
 
     if chat_id != LOGGER_ID:
         try:
@@ -353,5 +310,5 @@ async def autoplay_log(client, chat_id, query, vibe="Unknown", is_clone=False, c
                 disable_web_page_preview=True,
                 reply_markup=reply_markup
             )
-        except Exception as e:
-            print(f"[ERROR] Sending Autoplay Log Failed: {e}")
+        except:
+            pass
