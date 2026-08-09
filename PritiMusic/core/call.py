@@ -1,4 +1,3 @@
-
 import asyncio
 import os
 import random
@@ -27,17 +26,18 @@ from PritiMusic.utils.database import (
     remove_active_chat,
     remove_active_video_chat,
     set_loop,
+    is_autoplay_on,
 )
+from PritiMusic.utils.autoplay import fetch_autoplay_track, remember_played
+from PritiMusic.utils.stream.queue import put_queue
 from PritiMusic.utils.exceptions import AssistantErr
 from PritiMusic.utils.formatters import check_duration, seconds_to_min, speed_converter
 from PritiMusic.utils.inline.play import stream_markup, telegram_markup
 from PritiMusic.utils.stream.autoclear import auto_clean
 from strings import get_string
 from PritiMusic.utils.thumbnails import get_thumb
+from PritiMusic.utils.logger import play_logs
 
-# ==========================================
-# 🛑 GLOBAL ERROR HANDLER & STATE SYNC
-# ==========================================
 def handle_asyncio_exceptions(loop, context):
     msg = context.get("exception", context.get("message"))
     msg_str = str(msg).lower()
@@ -85,7 +85,6 @@ async def _clear_(chat_id):
 
 class Call(PyTgCalls):
     def __init__(self):
-        # Assistant 1
         self.userbot1 = Client(
             name="LuckyAss1",
             api_id=config.API_ID,
@@ -94,7 +93,6 @@ class Call(PyTgCalls):
         )
         self.one = PyTgCalls(self.userbot1, cache_duration=100)
 
-        # Assistant 2
         self.two = None
         if getattr(config, "STRING2", None):
             self.userbot2 = Client(
@@ -105,7 +103,6 @@ class Call(PyTgCalls):
             )
             self.two = PyTgCalls(self.userbot2, cache_duration=100)
 
-        # Assistant 3
         self.three = None
         if getattr(config, "STRING3", None):
             self.userbot3 = Client(
@@ -116,7 +113,6 @@ class Call(PyTgCalls):
             )
             self.three = PyTgCalls(self.userbot3, cache_duration=100)
 
-        # Assistant 4
         self.four = None
         if getattr(config, "STRING4", None):
             self.userbot4 = Client(
@@ -127,7 +123,6 @@ class Call(PyTgCalls):
             )
             self.four = PyTgCalls(self.userbot4, cache_duration=100)
 
-        # Assistant 5
         self.five = None
         if getattr(config, "STRING5", None):
             self.userbot5 = Client(
@@ -226,14 +221,11 @@ class Call(PyTgCalls):
             if assistant:
                 try: 
                     await assistant.leave_call(chat_id)
-                    LOGGER(__name__).info(f"✅ Assistant left VC successfully in chat {chat_id}.")
                 except Exception as e: 
                     error_msg = str(e).lower()
                     ignore_list = ["no active group call", "already ended", "not in a call", "groupcall_forbidden", "groupcall_invalid"]
-                    if any(ign in error_msg for ign in ignore_list):
-                        LOGGER(__name__).info(f"ℹ️ Assistant State Sync: VC already closed in {chat_id}.")
-                    else:
-                        LOGGER(__name__).error(f"❌ Assistant failed to leave VC in {chat_id}: {e}")
+                    if not any(ign in error_msg for ign in ignore_list):
+                        pass
 
         if chat_id in self.active_clients: 
             del self.active_clients[chat_id]
@@ -250,10 +242,8 @@ class Call(PyTgCalls):
                 except Exception as e: 
                     error_msg = str(e).lower()
                     ignore_list = ["no active group call", "already ended", "not in a call", "groupcall_forbidden", "groupcall_invalid"]
-                    if any(ign in error_msg for ign in ignore_list):
-                        LOGGER(__name__).info(f"ℹ️ Assistant State Sync: VC already closed in {chat_id} (Force).")
-                    else:
-                        LOGGER(__name__).error(f"❌ Assistant force-leave failed in {chat_id}: {e}")
+                    if not any(ign in error_msg for ign in ignore_list):
+                        pass
 
         if chat_id in self.active_clients: 
             del self.active_clients[chat_id]
@@ -310,6 +300,7 @@ class Call(PyTgCalls):
             db[chat_id][0]["seconds"] = dur
             db[chat_id][0]["speed_path"] = out
             db[chat_id][0]["speed"] = speed
+
     async def skip_stream(self, chat_id: int, link: str, video: Union[bool, str] = None, image: Union[bool, str] = None, assistant_type=None):
         assistants = await self.get_active_clients(chat_id)
         for assistant in assistants:
@@ -323,6 +314,95 @@ class Call(PyTgCalls):
         for assistant in assistants:
             try: await self._safe_change_stream(assistant, chat_id, file_path, is_video, extra_args)
             except: pass
+    async def autoplay_start(self, chat_id: int, original_chat_id: int, seed_title: str, seed_vidid: str = None, client: PyTgCalls = None) -> bool:
+        if seed_vidid:
+            remember_played(chat_id, seed_vidid)
+
+        status_msg = None
+        try:
+            status_msg = await app.send_message(original_chat_id, "ʜσʟᴅ ση...\n\nᴅσᴡηʟσᴧᴅɪηɢ ηєxᴛ ϻєᴅɪᴧ ғʀσϻ ᴛʜє ǫυєυє.")
+        except Exception:
+            pass
+
+        async def _fail() -> bool:
+            if status_msg:
+                try: await status_msg.delete()
+                except: pass
+            return False
+
+        track = await fetch_autoplay_track(chat_id, seed_title, seed_vidid)
+        if not track:
+            return await _fail()
+
+        try:
+            language = await get_lang(chat_id)
+            _ = get_string(language)
+        except:
+            _ = get_string("en")
+
+        try:
+            file_path, direct = await YouTube.download(track["vidid"], None, videoid=True)
+        except Exception:
+            return await _fail()
+            
+        if not file_path:
+            return await _fail()
+
+        remember_played(chat_id, track["vidid"])
+        title = track["title"].title()
+        duration_min = track["duration_min"]
+
+        await put_queue(
+            chat_id,
+            original_chat_id,
+            file_path if direct else f"vid_{track['vidid']}",
+            title,
+            duration_min,
+            "🔁 ᴀᴜᴛᴏᴘʟᴀʏ",
+            track["vidid"],
+            1,
+            "audio",
+            forceplay=True,
+        )
+
+        active_assistants = await self.get_active_clients(chat_id)
+        assistant = client if client else (active_assistants[0] if active_assistants else self.one)
+        
+        try:
+            await self._safe_change_stream(assistant, chat_id, file_path, video=False)
+        except Exception as e:
+            return await _fail()
+
+        try:
+            img = await get_thumb(track["vidid"], 0, app) or get_random_img(config.PLAYLIST_IMG_URL)
+            button = stream_markup(_, chat_id)
+            run = await app.send_photo(
+                chat_id=original_chat_id,
+                photo=img,
+                caption=_["stream_1"].format(
+                    f"https://t.me/{app.username}?start=info_{track['vidid']}",
+                    title[:23],
+                    duration_min,
+                    "ᴀᴜᴛᴏᴘʟᴀʏ 🎧",
+                ),
+                reply_markup=InlineKeyboardMarkup(button),
+            )
+            if db.get(chat_id):
+                db[chat_id][0]["mystic"] = run
+                db[chat_id][0]["markup"] = "stream"
+        except Exception:
+            pass
+
+        if status_msg:
+            try: await status_msg.delete()
+            except Exception: pass
+
+        try:
+            await play_logs(original_chat_id, title)
+        except Exception:
+            pass
+
+        return True
 
     async def join_call(self, chat_id: int, original_chat_id: int, link, video: Union[bool, str] = None, image: Union[bool, str] = None, userbot=None):
         assistant_to_join = None
@@ -352,8 +432,8 @@ class Call(PyTgCalls):
                                 await self.stop_stream(c_id)
                         elif "StreamEnd" in t_name:
                             await self.change_stream(client, c_id)
-                    except Exception as e:
-                        LOGGER(__name__).error(f"❌ Clone stream handler exception: {e}")
+                    except Exception:
+                        pass
 
                 await assistant_to_join.start()
                 self.custom_assistants[user_id] = assistant_to_join
@@ -374,7 +454,6 @@ class Call(PyTgCalls):
         await music_on(chat_id)
         if video: await add_active_video_chat(chat_id)
 
-        # 🟢 TYPERROR FIX APPLIED HERE
         if await is_autoend(chat_id):
             counter[chat_id] = {}
             try:
@@ -384,7 +463,6 @@ class Call(PyTgCalls):
             except: pass
 
     async def change_stream(self, client, chat_id):
-        # 🟢 ROUTING FIX
         active_assistants = await self.get_active_clients(chat_id)
         client = active_assistants[0] if active_assistants else client
 
@@ -402,14 +480,24 @@ class Call(PyTgCalls):
             if popped: await auto_clean(popped)
 
             if not db.get(chat_id): 
+                if popped and await is_autoplay_on(chat_id):
+                    started = await self.autoplay_start(
+                        chat_id,
+                        popped.get("chat_id", chat_id),
+                        popped.get("title"),
+                        popped.get("vidid"),
+                        client=client,
+                    )
+                    if started:
+                        return
+
                 await _clear_(chat_id)
                 if chat_id in self.active_clients: del self.active_clients[chat_id]
                 try: await client.leave_call(chat_id) 
                 except: pass
                 return
 
-        except Exception as e:
-            LOGGER(__name__).error(f"❌ Error inside change_stream execution framework: {e}")
+        except Exception:
             await _clear_(chat_id)
             if chat_id in self.active_clients: del self.active_clients[chat_id]
             try: await client.leave_call(chat_id) 
@@ -491,7 +579,6 @@ class Call(PyTgCalls):
                 img = await get_thumb(videoid, user_id, chat_client) or get_random_img(config.PLAYLIST_IMG_URL)
                 button = stream_markup(_, chat_id)
 
-                # 🟢 MYSTIC DELETE PRESERVED
                 try: await mystic.delete()
                 except: pass
 
