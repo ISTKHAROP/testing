@@ -9,14 +9,14 @@ from pyrogram.types import (
     CallbackQuery,
 )
 
-from PritiMusic.utils.database.autoplay import (
-    is_autoplay_group,
-    add_autoplay_group,
-    remove_autoplay_group,
+# 🟢 FIX: Updated Autoplay Imports
+from PritiMusic.utils.database import (
+    is_autoplay_on,
+    autoplay_on,
+    autoplay_off,
 )
 from PritiMusic.utils.decorators import AdminRightsCheck
 from config import BANNED_USERS
-
 
 AUTOPLAY_BANNER = "https://files.catbox.moe/6r97s4.jpg"
 
@@ -91,7 +91,22 @@ async def autoplay_panel(
     _,
     chat_id,
 ):
-    enabled = await is_autoplay_group(chat_id)
+    mention = message.from_user.mention
+    
+    # 🟢 NEW: Direct command enable/disable with fancy blockquote
+    if len(message.command) > 1:
+        query = message.command[1].lower()
+        if query in ["enable", "on"]:
+            await autoplay_on(chat_id)
+            text = f"<blockquote><b>🟢 🎧 Ʌυᴛσᴘʟᴧʏ sʏsᴛєϻ</b>\n\n<b>Ʌυᴛσᴘʟᴧʏ ғσʀ ᴛʜɪs ɢʀσυᴘ ɪs ησᴡ єηᴧʙʟєᴅ 🟢.</b>\n└ <b>ʙʏ :</b> {mention}</blockquote>"
+            return await message.reply_text(text)
+        elif query in ["disable", "off"]:
+            await autoplay_off(chat_id)
+            text = f"<blockquote><b>🔴 🎧 Ʌυᴛσᴘʟᴧʏ sʏsᴛєϻ</b>\n\n<b>Ʌυᴛσᴘʟᴧʏ ғσʀ ᴛʜɪs ɢʀσυᴘ ɪs ησᴡ ᴅɪsᴧʙʟєᴅ 🔴.</b>\n└ <b>ʙʏ :</b> {mention}</blockquote>"
+            return await message.reply_text(text)
+
+    # Regular panel
+    enabled = await is_autoplay_on(chat_id)
 
     await message.reply_photo(
         photo=AUTOPLAY_BANNER,
@@ -116,7 +131,7 @@ async def autoplay_callback(
         return await query.answer("❌ You must be an admin to change this setting!", show_alert=True)
 
     if action == "AUTOPLAY_ENABLE":
-        await add_autoplay_group(chat_id)
+        await autoplay_on(chat_id)
         enabled = True
 
         await query.answer(
@@ -124,7 +139,7 @@ async def autoplay_callback(
             show_alert=False,
         )
     else:
-        await remove_autoplay_group(chat_id)
+        await autoplay_off(chat_id)
         enabled = False
 
         await query.answer(
