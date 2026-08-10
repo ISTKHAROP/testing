@@ -39,7 +39,6 @@ from strings import get_string
 from PritiMusic.utils.thumbnails import get_thumb
 from PritiMusic.cplugin.buttons import panel_markup_clone
 
-
 def handle_asyncio_exceptions(loop, context):
     msg = context.get("exception", context.get("message"))
     msg_str = str(msg).lower()
@@ -329,7 +328,6 @@ class Call:
             db[chat_id][0]["seconds"] = dur
             db[chat_id][0]["speed_path"] = out
             db[chat_id][0]["speed"] = speed
-
     async def skip_stream(self, chat_id: int, link: str, video: Union[bool, str] = None, image: Union[bool, str] = None, assistant_type=None):
         assistants = await self.get_active_clients(chat_id)
         for assistant in assistants:
@@ -397,6 +395,9 @@ class Call:
             forceplay=True,
         )
 
+        if db.get(chat_id):
+            db[chat_id][-1]["client"] = chat_client
+
         active_assistants = await self.get_active_clients(chat_id)
         assistant = client if client else (active_assistants[0] if active_assistants else self.one)
 
@@ -406,14 +407,20 @@ class Call:
             return await _fail()
 
         try:
+            is_clone = (chat_client.me.id != app.me.id) if chat_client.me else False
+            bot_username = chat_client.me.username if chat_client.me else app.username
+        except:
+            is_clone = False
+            bot_username = app.username
+
+        try:
             img = await get_thumb(track["vidid"], 0, chat_client) or get_random_img(config.PLAYLIST_IMG_URL)
             
-            if chat_client.me and chat_client.me.id != app.me.id:
+            if is_clone:
                 button = panel_markup_clone(_, track["vidid"], chat_id)
             else:
                 button = stream_markup(_, chat_id)
             
-            bot_username = chat_client.me.username if chat_client.me else app.username
             run = await chat_client.send_photo(
                 chat_id=original_chat_id,
                 photo=img,
@@ -439,6 +446,22 @@ class Call:
         try:
             await play_logs(original_chat_id, title)
         except Exception:
+            pass
+
+        try:
+            from PritiMusic.cplugin.setinfo import get_log_channel
+            logger_id = await get_log_channel(chat_client.me.id)
+            if logger_id and str(logger_id) != "-100":
+                bot_mention = chat_client.me.mention if chat_client.me else chat_client.name
+                log_text = (
+                    f"<blockquote><b>{bot_mention} ᴘʟᴀʏ ʟᴏɢ</b>\n\n"
+                    f"<b>• ʀᴇǫᴜᴇsᴛ ʙʏ :</b> ᴀᴜᴛᴏᴘʟᴀʏ\n"
+                    f"<b>• ǫᴜᴇʀʏ :</b> {title}\n"
+                    f"<b>• ᴄʜᴀᴛ :</b> {original_chat_id}</blockquote>"
+                )
+                await chat_client.send_message(logger_id, log_text, parse_mode=ParseMode.HTML)
+        except Exception as e:
+            LOGGER(__name__).error(f"Autoplay Log Error: {e}")
             pass
 
         return True
@@ -573,10 +596,15 @@ class Call:
             title = str(raw_title).title() if raw_title else "Unknown Title"
             raw_user = db[chat_id][0].get("by")
             user = str(raw_user) if raw_user and str(raw_user).strip() else "Unknown User"
-            user_id = db[chat_id][0].get("user_id", 0) 
             duration_str = db[chat_id][0].get("dur", "0:00")
+            user_id = db[chat_id][0].get("user_id", 0) 
             
-            bot_username = chat_client.me.username if chat_client.me else app.username
+            try:
+                is_clone = (chat_client.me.id != app.me.id) if chat_client.me else False
+                bot_username = chat_client.me.username if chat_client.me else app.username
+            except:
+                is_clone = False
+                bot_username = app.username
 
             if "live_" in queued:
                 n, link = await YouTube.video(videoid, True)
@@ -621,7 +649,7 @@ class Call:
 
                 img = await get_thumb(videoid, user_id, chat_client) or get_random_img(config.PLAYLIST_IMG_URL)
                 
-                if chat_client.me and chat_client.me.id != app.me.id:
+                if is_clone:
                     button = panel_markup_clone(_, videoid, chat_id)
                 else:
                     button = stream_markup(_, chat_id)
@@ -689,7 +717,7 @@ class Call:
                 else:
                     img = await get_thumb(videoid, user_id, chat_client) or get_random_img(config.PLAYLIST_IMG_URL)
                     
-                    if chat_client.me and chat_client.me.id != app.me.id:
+                    if is_clone:
                         button = panel_markup_clone(_, videoid, chat_id)
                     else:
                         button = stream_markup(_, chat_id)
