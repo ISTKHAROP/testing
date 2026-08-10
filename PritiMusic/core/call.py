@@ -37,10 +37,9 @@ from PritiMusic.utils.inline.play import stream_markup, telegram_markup
 from PritiMusic.utils.stream.autoclear import auto_clean
 from strings import get_string
 from PritiMusic.utils.thumbnails import get_thumb
+from PritiMusic.cplugin.buttons import panel_markup_clone
 
-# ==========================================
-# 🛑 GLOBAL ERROR HANDLER & STATE SYNC
-# ==========================================
+
 def handle_asyncio_exceptions(loop, context):
     msg = context.get("exception", context.get("message"))
     msg_str = str(msg).lower()
@@ -87,7 +86,6 @@ async def _clear_(chat_id):
 
 class Call:
     def __init__(self):
-        # Assistant 1
         self.userbot1 = Client(
             name="LuckyAss1",
             api_id=config.API_ID,
@@ -96,7 +94,6 @@ class Call:
         )
         self.one = PyTgCalls(self.userbot1, cache_duration=100)
 
-        # Assistant 2
         self.two = None
         if getattr(config, "STRING2", None):
             self.userbot2 = Client(
@@ -107,7 +104,6 @@ class Call:
             )
             self.two = PyTgCalls(self.userbot2, cache_duration=100)
 
-        # Assistant 3
         self.three = None
         if getattr(config, "STRING3", None):
             self.userbot3 = Client(
@@ -118,7 +114,6 @@ class Call:
             )
             self.three = PyTgCalls(self.userbot3, cache_duration=100)
 
-        # Assistant 4
         self.four = None
         if getattr(config, "STRING4", None):
             self.userbot4 = Client(
@@ -129,7 +124,6 @@ class Call:
             )
             self.four = PyTgCalls(self.userbot4, cache_duration=100)
 
-        # Assistant 5
         self.five = None
         if getattr(config, "STRING5", None):
             self.userbot5 = Client(
@@ -335,6 +329,7 @@ class Call:
             db[chat_id][0]["seconds"] = dur
             db[chat_id][0]["speed_path"] = out
             db[chat_id][0]["speed"] = speed
+
     async def skip_stream(self, chat_id: int, link: str, video: Union[bool, str] = None, image: Union[bool, str] = None, assistant_type=None):
         assistants = await self.get_active_clients(chat_id)
         for assistant in assistants:
@@ -349,13 +344,15 @@ class Call:
             try: await self._safe_change_stream(assistant, chat_id, file_path, is_video, extra_args)
             except: pass
 
-    async def autoplay_start(self, chat_id: int, original_chat_id: int, seed_title: str, seed_vidid: str = None, client: PyTgCalls = None) -> bool:
+    async def autoplay_start(self, chat_id: int, original_chat_id: int, seed_title: str, seed_vidid: str = None, client: PyTgCalls = None, bot_client = None) -> bool:
         if seed_vidid:
             remember_played(chat_id, seed_vidid)
 
+        chat_client = bot_client or app 
+        
         status_msg = None
         try:
-            status_msg = await app.send_message(original_chat_id, "ʜσʟᴅ ση...\n\nᴅσᴡηʟσᴧᴅɪηɢ ηєxᴛ ϻєᴅɪᴧ ғʀσϻ ᴛʜє ǫυєυє.")
+            status_msg = await chat_client.send_message(original_chat_id, "ʜσʟᴅ ση...\n\nᴅσᴡηʟσᴧᴅɪηɢ ηєxᴛ ϻєᴅɪᴧ ғʀσϻ ᴛʜє ǫυєυє.")
         except Exception:
             pass
 
@@ -409,13 +406,19 @@ class Call:
             return await _fail()
 
         try:
-            img = await get_thumb(track["vidid"], 0, app) or get_random_img(config.PLAYLIST_IMG_URL)
-            button = stream_markup(_, chat_id)
-            run = await app.send_photo(
+            img = await get_thumb(track["vidid"], 0, chat_client) or get_random_img(config.PLAYLIST_IMG_URL)
+            
+            if chat_client.me and chat_client.me.id != app.me.id:
+                button = panel_markup_clone(_, track["vidid"], chat_id)
+            else:
+                button = stream_markup(_, chat_id)
+            
+            bot_username = chat_client.me.username if chat_client.me else app.username
+            run = await chat_client.send_photo(
                 chat_id=original_chat_id,
                 photo=img,
                 caption=_["stream_1"].format(
-                    f"https://t.me/{app.username}?start=info_{track['vidid']}",
+                    f"https://t.me/{bot_username}?start=info_{track['vidid']}",
                     title[:23],
                     duration_min,
                     "ᴀᴜᴛᴏᴘʟᴀʏ 🎧",
@@ -425,7 +428,8 @@ class Call:
             if db.get(chat_id):
                 db[chat_id][0]["mystic"] = run
                 db[chat_id][0]["markup"] = "stream"
-        except Exception:
+        except Exception as e:
+            LOGGER(__name__).error(f"Autoplay Send Photo Error: {e}")
             pass
 
         if status_msg:
@@ -522,6 +526,7 @@ class Call:
                         popped.get("title"),
                         popped.get("vidid"),
                         client=client,
+                        bot_client=popped.get("client", app)
                     )
                     if started:
                         return
@@ -570,6 +575,8 @@ class Call:
             user = str(raw_user) if raw_user and str(raw_user).strip() else "Unknown User"
             user_id = db[chat_id][0].get("user_id", 0) 
             duration_str = db[chat_id][0].get("dur", "0:00")
+            
+            bot_username = chat_client.me.username if chat_client.me else app.username
 
             if "live_" in queued:
                 n, link = await YouTube.video(videoid, True)
@@ -582,7 +589,7 @@ class Call:
                 try:
                     run = await chat_client.send_photo(
                         chat_id=original_chat_id, photo=get_random_img(config.STREAM_IMG_URL),
-                        caption=_["stream_1"].format(f"https://t.me/{app.username}?start=info_{videoid}", title[:23], duration_str, user),
+                        caption=_["stream_1"].format(f"https://t.me/{bot_username}?start=info_{videoid}", title[:23], duration_str, user),
                         reply_markup=InlineKeyboardMarkup(button)
                     )
                     if db.get(chat_id):
@@ -613,7 +620,11 @@ class Call:
                 except: return await chat_client.send_message(original_chat_id, text=_["call_6"])
 
                 img = await get_thumb(videoid, user_id, chat_client) or get_random_img(config.PLAYLIST_IMG_URL)
-                button = stream_markup(_, chat_id)
+                
+                if chat_client.me and chat_client.me.id != app.me.id:
+                    button = panel_markup_clone(_, videoid, chat_id)
+                else:
+                    button = stream_markup(_, chat_id)
 
                 try: await mystic.delete()
                 except: pass
@@ -621,7 +632,7 @@ class Call:
                 try:
                     run = await chat_client.send_photo(
                         chat_id=original_chat_id, photo=img,
-                        caption=_["stream_1"].format(f"https://t.me/{app.username}?start=info_{videoid}", title[:23], duration_str, user),
+                        caption=_["stream_1"].format(f"https://t.me/{bot_username}?start=info_{videoid}", title[:23], duration_str, user),
                         reply_markup=InlineKeyboardMarkup(button)
                     )
                     if db.get(chat_id):
@@ -677,11 +688,16 @@ class Call:
 
                 else:
                     img = await get_thumb(videoid, user_id, chat_client) or get_random_img(config.PLAYLIST_IMG_URL)
-                    button = stream_markup(_, chat_id)
+                    
+                    if chat_client.me and chat_client.me.id != app.me.id:
+                        button = panel_markup_clone(_, videoid, chat_id)
+                    else:
+                        button = stream_markup(_, chat_id)
+                        
                     try:
                         run = await chat_client.send_photo(
                             chat_id=original_chat_id, photo=img,
-                            caption=_["stream_1"].format(f"https://t.me/{app.username}?start=info_{videoid}", title[:23], duration_str, user),
+                            caption=_["stream_1"].format(f"https://t.me/{bot_username}?start=info_{videoid}", title[:23], duration_str, user),
                             reply_markup=InlineKeyboardMarkup(button)
                         )
                         if db.get(chat_id):
