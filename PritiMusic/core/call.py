@@ -39,6 +39,7 @@ from strings import get_string
 from PritiMusic.utils.thumbnails import get_thumb
 from PritiMusic.cplugin.buttons import panel_markup_clone
 
+
 def handle_asyncio_exceptions(loop, context):
     msg = context.get("exception", context.get("message"))
     msg_str = str(msg).lower()
@@ -205,6 +206,8 @@ class Call:
             await assistant_to_join.play(chat_id, stream)
 
     async def get_active_clients(self, chat_id):
+        try: chat_id = int(chat_id)
+        except: pass
         clients = []
         if chat_id in self.active_clients:
             val = self.active_clients[chat_id]
@@ -221,16 +224,20 @@ class Call:
         return list(set(clients))
 
     async def pause_stream(self, chat_id: int, assistant_type=None):
+        try: chat_id = int(chat_id)
+        except: pass
         assistants = await self.get_active_clients(chat_id)
         for assistant in assistants:
             try: await assistant.pause_stream(chat_id)
-            except: pass
+            except Exception as e: LOGGER(__name__).error(f"Pause error: {e}")
 
     async def resume_stream(self, chat_id: int, assistant_type=None):
+        try: chat_id = int(chat_id)
+        except: pass
         assistants = await self.get_active_clients(chat_id)
         for assistant in assistants:
             try: await assistant.resume_stream(chat_id)
-            except: pass
+            except Exception as e: LOGGER(__name__).error(f"Resume error: {e}")
 
     async def stop_stream(self, chat_id: int, assistant_type=None):
         try: chat_id = int(chat_id)
@@ -280,6 +287,8 @@ class Call:
         except: pass
 
     async def speedup_stream(self, chat_id: int, file_path, speed, playing):
+        try: chat_id = int(chat_id)
+        except: pass
         assistants = await self.get_active_clients(chat_id)
         assistant = assistants[0] if assistants else self.one
         if str(speed) != str("1.0"):
@@ -329,12 +338,16 @@ class Call:
             db[chat_id][0]["speed_path"] = out
             db[chat_id][0]["speed"] = speed
     async def skip_stream(self, chat_id: int, link: str, video: Union[bool, str] = None, image: Union[bool, str] = None, assistant_type=None):
+        try: chat_id = int(chat_id)
+        except: pass
         assistants = await self.get_active_clients(chat_id)
         for assistant in assistants:
             try: await self._safe_change_stream(assistant, chat_id, link, video)
             except: pass
 
     async def seek_stream(self, chat_id, file_path, to_seek, duration, mode):
+        try: chat_id = int(chat_id)
+        except: pass
         assistants = await self.get_active_clients(chat_id)
         is_video = mode == "video"
         extra_args = f"-ss {to_seek} -to {duration}"
@@ -450,16 +463,31 @@ class Call:
 
         try:
             from PritiMusic.cplugin.setinfo import get_log_channel
-            logger_id = await get_log_channel(chat_client.me.id)
-            if logger_id and str(logger_id) != "-100":
-                bot_mention = chat_client.me.mention if chat_client.me else chat_client.name
-                log_text = (
-                    f"<blockquote><b>{bot_mention} ᴘʟᴀʏ ʟᴏɢ</b>\n\n"
-                    f"<b>• ʀᴇǫᴜᴇsᴛ ʙʏ :</b> ᴀᴜᴛᴏᴘʟᴀʏ\n"
-                    f"<b>• ǫᴜᴇʀʏ :</b> {title}\n"
-                    f"<b>• ᴄʜᴀᴛ :</b> {original_chat_id}</blockquote>"
-                )
-                await chat_client.send_message(logger_id, log_text, parse_mode=ParseMode.HTML)
+            from PritiMusic.utils.database.clonedb import get_owner_id_from_db
+            
+            c_bot_id = chat_client.me.id if chat_client.me else None
+            if c_bot_id:
+                logger_id = await get_log_channel(c_bot_id)
+                
+                if not logger_id or str(logger_id) == "-100":
+                    logger_id = await get_owner_id_from_db(c_bot_id)
+                
+                if logger_id:
+                    c_bot_name = chat_client.me.first_name if chat_client.me else chat_client.name
+                    try:
+                        chat_info = await chat_client.get_chat(original_chat_id)
+                        chat_title = f"{chat_info.title} [`{original_chat_id}`]"
+                    except:
+                        chat_title = f"[`{original_chat_id}`]"
+
+                    log_text = (
+                        f"<blockquote><b>{c_bot_name} ᴘʟᴀʏ ʟᴏɢ</b>\n\n"
+                        f"<b>• ʀᴇǫᴜᴇsᴛ ʙʏ :</b> ᴀᴜᴛᴏᴘʟᴀʏ 🎧\n"
+                        f"<b>• ǫᴜᴇʀʏ :</b> {title}\n"
+                        f"<b>• ᴄʜᴀᴛ :</b> {chat_title}\n"
+                        f"<b>• ᴏᴡɴᴇʀ :</b> {logger_id}</blockquote>"
+                    )
+                    await chat_client.send_message(logger_id, log_text, parse_mode=ParseMode.HTML)
         except Exception as e:
             LOGGER(__name__).error(f"Autoplay Log Error: {e}")
             pass
