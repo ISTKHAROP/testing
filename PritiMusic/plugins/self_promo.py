@@ -1,14 +1,17 @@
 import asyncio
 import time
+from datetime import datetime, timedelta, timezone
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
-from pyrogram.enums import ButtonStyle
-from pyrogram.errors import FloodWait, UserIsBlocked, InputUserDeactivated
+from pyrogram.errors import FloodWait
 
 from motor.motor_asyncio import AsyncIOMotorClient
 from config import MONGO_DB_URI, LOGGER_ID, SUDOERS, OWNER_ID
 from PritiMusic import app
 from PritiMusic.utils.database import get_served_users, get_served_chats
+
+# IST (Indian Standard Time) Setup
+IST = timezone(timedelta(hours=5, minutes=30))
 
 # ==========================================
 # DATABASE SETUP
@@ -46,19 +49,44 @@ async def delete_promo_record(chat_id: int, message_id: int):
 # ==========================================
 # PROMO DETAILS
 # ==========================================
-PROMO_IMAGE = "https://files.catbox.moe/u4db8r.jpg"
+PROMO_IMAGE = "https://d.uguu.se/beSAOQgM.jpg"
 PROMO_TEXT = """
-⊚ ᴛʜɪꜱ ɪꜱ ✶ 🎀 ᴍᴀʜɪ ᴍᴜꜱɪᴄ ᴄʟᴏɴᴇ🎀 ✶
+╔═══════ ✦ 🎧 ✦ ═══════╗
+       ѕɪᴢᴢᴜ ᴍᴜꜱɪᴄ
+      ᴄʟᴏɴᴇ ꜰᴜᴛᴜʀᴇ
+╚═══════ ✦ 🎧 ✦ ═══════╝
 
-➻ ᴧ ᴘʀєᴍɪᴜᴍ ᴅєꜱɪɢηєᴅ ϻᴜꜱɪᴄ ᴘʟᴧʏєʀ ʙσᴛ ꜰσʀ ᴛєʟєɢʀᴧϻ ɢʀσᴜᴘ & ᴄʜᴧηηєʟ. 
-🎧 24x7 ᴍᴜꜱɪᴄ • ꜱᴍᴏᴏᴛʜ ᴀɴᴅ ꜰᴀꜱᴛ ᴘʟᴀʏʙᴀᴄᴋ
+⊚ ᴛʜɪꜱ ɪꜱ ✶ ѕɪᴢᴢᴜ ᴍᴜꜱɪᴄ ᴄʟᴏɴᴇ ✶
 
-⚡️ ᴇɴᴊᴏʏ ᴜɴʟɪᴍɪᴛᴇᴅ ꜱᴏɴɢꜱ, qᴜɪᴄᴋ ʀᴇꜱᴘᴏɴꜱᴇ, ᴀɴᴅ ᴄʟᴇᴀʀ ᴀᴜᴅɪᴏ ɪɴ ʏᴏᴜʀ ɢʀᴏᴜᴘ ᴠᴏɪᴄᴇ ᴄʜᴀᴛ.
+➻ ᴘʀᴇᴍɪᴜᴍ ᴅᴇꜱɪɢɴ
+➻ ꜱᴍᴀʀᴛ ᴍᴜꜱɪᴄ ᴘʟᴀʏᴇʀ
+➻ ʙᴜɪʟᴛ ꜰᴏʀ ᴛᴇʟᴇɢʀᴀᴍ
 
-ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ, ᴍᴀᴋᴇ ᴍᴇ ᴀᴅᴍɪɴ, ᴀɴᴅ ꜱᴇɴᴅ /play song name ᴛᴏ ꜱᴛᴀʀᴛ ᴛʜᴇ ᴍᴜꜱɪᴄ.
+🎧 24x7 ᴍᴜꜱɪᴄ
+⚡️ ꜰᴀꜱᴛ ʀᴇꜱᴘᴏɴꜱᴇ
+🎶 ᴜɴʟɪᴍɪᴛᴇᴅ ᴘʟᴀʏ
+🔊 ʜɪɢʜ-ǫᴜᴀʟɪᴛʏ ᴀᴜᴅɪᴏ
+💫 ꜱᴛᴀʙʟᴇ & ꜱᴍᴏᴏᴛʜ
+
+➻ ᴀᴅᴅ ᴍᴇ ➜ ᴍᴀᴋᴇ ᴍᴇ ᴀᴅᴍɪɴ
+➻ /play ꜱᴏɴɢ ɴᴀᴍᴇ 🎵
+
+🎀 ѕɪᴢᴢᴜ ᴍᴜꜱɪᴄ
+✦ ᴄʟᴏɴᴇ ꜰᴜᴛᴜʀᴇ ✦
 """
+
+# FIX: Pyrogram doesn't support 'ButtonStyle', so it was removed to prevent crashes.
 PROMO_BUTTON = InlineKeyboardMarkup(
-    [[InlineKeyboardButton("🎵Aᴅᴅ ᴍᴇ ɪɴ ʏᴏᴜʀ ɢʀᴏᴜᴘ🎧", url="https://t.me/clone_MUSICrobot", style=ButtonStyle.SUCCESS)]]
+    [[
+        InlineKeyboardButton(
+            "🎵 ᴀᴅᴅ ᴍᴇ ɪɴ ʏᴏᴜʀ ɢʀᴏᴜᴘ 🎧",
+            url="https://t.me/SizzuMusicBot"
+        ),
+        InlineKeyboardButton(
+            "✦ ᴄʟᴏɴᴇ ꜰᴜᴛᴜʀᴇ ✦",
+            url="https://t.me/SizzuMusicBot"
+        )
+    ]]
 )
 
 
@@ -66,8 +94,6 @@ PROMO_BUTTON = InlineKeyboardMarkup(
 # CORE BROADCAST FUNCTION
 # ==========================================
 async def run_broadcast():
-    await broadcast_time_db.update_one({"_id": "last_run"}, {"$set": {"time": int(time.time())}}, upsert=True)
-    
     users = await get_served_users()
     chats = await get_served_chats()
 
@@ -116,12 +142,10 @@ async def run_broadcast():
 # ==========================================
 # COMMAND: ON / OFF / RUN
 # ==========================================
-# 🟢 FIX: Filter hata diya gaya hai taaki debug message aa sake
 @app.on_message(filters.command(["selfpromo", "promo"], prefixes=["/", "!", "."]))
 async def promo_toggle_cmd(client, message: Message):
     user_id = message.from_user.id
     
-    # Check kar rahe hain ki command dene wala Owner ya Sudoer hai ya nahi
     sudo_list = [int(x) for x in SUDOERS] if isinstance(SUDOERS, list) else []
     owner_id_int = int(OWNER_ID) if OWNER_ID else 0
     
@@ -134,7 +158,7 @@ async def promo_toggle_cmd(client, message: Message):
     if len(message.command) != 2:
         return await message.reply_text(
             "**Usage Options:**\n"
-            "`/selfpromo on` - Start auto 24-hour broadcast\n"
+            "`/selfpromo on` - Start auto broadcast (7 AM & 7 PM)\n"
             "`/selfpromo off` - Stop auto broadcast\n"
             "`/selfpromo run` - Instantly broadcast right now"
         )
@@ -143,7 +167,7 @@ async def promo_toggle_cmd(client, message: Message):
     
     if state == "on":
         await set_promo_status(True)
-        await message.reply_text("✅ **Auto Self Promo Started!**\nBot will broadcast every 24 hours.")
+        await message.reply_text("✅ **Auto Self Promo Started!**\nBot will broadcast daily at 7:00 AM & 7:00 PM.")
         
     elif state == "off":
         await set_promo_status(False)
@@ -165,7 +189,7 @@ async def promo_toggle_cmd(client, message: Message):
 
 
 # ==========================================
-# BACKGROUND TASK: 24H LOOP & 48H DELETE
+# BACKGROUND TASK: TWICE A DAY & 48H DELETE
 # ==========================================
 async def auto_promo_task():
     while True:
@@ -182,21 +206,36 @@ async def auto_promo_task():
 
             # 2. CHECK IF PROMO IS ON
             if await is_promo_on():
-                # 3. CHECK IF 24 HOURS HAVE PASSED
-                last_run_data = await broadcast_time_db.find_one({"_id": "last_run"})
-                last_run = last_run_data["time"] if last_run_data else 0
+                now = datetime.now(IST)
                 
-                if (int(time.time()) - last_run) >= 86400: # 86400s = 24 hours
+                # Check current target slot (7 AM or 7 PM)
+                if now.hour >= 19:
+                    current_target_slot = f"{now.strftime('%Y-%m-%d')}_19"
+                elif now.hour >= 7:
+                    current_target_slot = f"{now.strftime('%Y-%m-%d')}_07"
+                else:
+                    yesterday = now - timedelta(days=1)
+                    current_target_slot = f"{yesterday.strftime('%Y-%m-%d')}_19"
+                
+                # 3. GET LAST RUN SLOT
+                last_run_data = await broadcast_time_db.find_one({"_id": "last_run_slot"})
+                last_run_slot = last_run_data["slot"] if last_run_data else ""
+                
+                # Agar last run wala slot aur abhi ka slot alag hai, toh bot promo bhejega
+                # Ye bot restart hone par bhi properly handle karega
+                if last_run_slot != current_target_slot:
+                    await broadcast_time_db.update_one({"_id": "last_run_slot"}, {"$set": {"slot": current_target_slot}}, upsert=True)
+                    
                     u_success, u_failed, g_success, g_failed = await run_broadcast()
-                    stats_text = f"📢 **Auto Promo Completed**\n\n👥 **Users:** ✅ {u_success} | ❌ {u_failed}\n🏘 **Groups:** ✅ {g_success} | ❌ {g_failed}"
+                    stats_text = f"📢 **Auto Promo Completed ({current_target_slot}:00)**\n\n👥 **Users:** ✅ {u_success} | ❌ {u_failed}\n🏘 **Groups:** ✅ {g_success} | ❌ {g_failed}"
                     if LOGGER_ID:
                         await app.send_message(LOGGER_ID, stats_text)
 
         except Exception as e:
-            pass # Background task errors ignored for smooth running
+            pass
             
-        # 1 ghante baad wapas check karega
-        await asyncio.sleep(3600)
+        # Har 60 seconds (1 min) mein check karega taaki exact time par hit ho
+        await asyncio.sleep(60)
 
 # Task Start Hook
 try:
