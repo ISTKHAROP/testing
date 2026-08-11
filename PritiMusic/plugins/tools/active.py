@@ -5,8 +5,8 @@ Active Chats Plugin for PritiMusic
 
 import os
 import asyncio
-from pyrogram import filters
-from pyrogram.types import Message
+from pyrogram import filters, Client
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.enums import ChatType
 from unidecode import unidecode
 from datetime import datetime
@@ -20,6 +20,8 @@ from PritiMusic.utils.database import (
     get_active_video_chats,
     get_assistant,
     get_served_chats,
+    remove_active_chat,
+    remove_active_video_chat,
 )
 from PritiMusic.utils.database.clonedb import get_served_chats_clone, clonebotdb
 
@@ -329,84 +331,74 @@ async def auto_leave_chats(_, message: Message):
 # MAIN BOT ACTIVE CALLS COMMANDS 
 # ===================================================
 
-@app.on_message(filters.command(["activevc", "vc", "activevoice"]) & SUDOERS)
-async def active_voice_chats(_, message: Message):
-    mystic = await message.reply_text("🔄 **Fetching Main Bot's active voice chats...**")
-    raw_active_chats = await get_active_chats()
-    
-    if not raw_active_chats:
-        return await mystic.edit_text(f"📭 **No active voice chats globally.**\n\n{POWERED_BY}")
-
-    all_clones = await clonebotdb.find({}).to_list(length=None)
-    clone_chat_ids = set()
-    for clone in all_clones:
-        bot_id = clone.get("bot_id")
-        if bot_id:
-            try:
-                served = await get_served_chats_clone(bot_id)
-                for c in served:
-                    clone_chat_ids.add(int(c["chat_id"]))
-            except: continue
-    
-    main_bot_chats = []
-    for cid in raw_active_chats:
+@app.on_message(filters.command(["activevc", "activevoice","vc"]) & SUDOERS)
+async def activevc(_, message: Message):
+    mystic = await message.reply_text("» ɢᴇᴛᴛɪɴɢ ᴀᴄᴛɪᴠᴇ ᴠᴏɪᴄᴇ ᴄʜᴀᴛs ʟɪsᴛ...")
+    served_chats = await get_active_chats()
+    text = ""
+    j = 0
+    for x in served_chats:
         try:
-            if int(cid) not in clone_chat_ids:
-                main_bot_chats.append(int(cid))
-        except: continue
-            
-    if not main_bot_chats:
-        return await mystic.edit_text(f"📭 **Main Bot has no active voice chats right now.**\n*(Clone bots might be playing though)*\n\n{POWERED_BY}")
-
-    text, j = "🎤 **Main Bot Active Voice Chats:**\n\n", 0
-    for chat_id in main_bot_chats:
+            title = (await app.get_chat(x)).title
+        except:
+            await remove_active_chat(x)
+            continue
         try:
-            chat = await app.get_chat(chat_id)
-            link = await get_chat_link(chat_id)
-            text += f"**{j + 1}.** [{unidecode(chat.title)[:25]}]({link}) `[{chat_id}]`\n"
+            if (await app.get_chat(x)).username:
+                user = (await app.get_chat(x)).username
+                text += f"<b>{j + 1}.</b> <a href=https://t.me/{user}>{unidecode(title).upper()}</a>\n"
+            else:
+                text += (
+                    f"<b>{j + 1}.</b> {unidecode(title).upper()}\n"
+                )
             j += 1
-        except: continue
-    await mystic.edit_text(f"{text}\n{POWERED_BY}", disable_web_page_preview=True)
+        except:
+            continue
+    if not text:
+        await mystic.edit_text(f"» ɴᴏ ᴀᴄᴛɪᴠᴇ ᴠᴏɪᴄᴇ ᴄʜᴀᴛs ᴏɴ {app.mention}.")
+    else:
+        await mystic.edit_text(
+            f"<b>» ʟɪsᴛ ᴏғ ᴄᴜʀʀᴇɴᴛʟʏ ᴀᴄᴛɪᴠᴇ ᴠᴏɪᴄᴇ ᴄʜᴀᴛs :</b>\n\n{text}",
+            disable_web_page_preview=True,
+        )
 
 
-@app.on_message(filters.command(["activevideo", "av", "activev"]) & SUDOERS)
-async def active_video_chats(_, message: Message):
-    mystic = await message.reply_text("🔄 **Fetching Main Bot's active video chats...**")
-    raw_active_chats = await get_active_video_chats()
-    
-    if not raw_active_chats:
-        return await mystic.edit_text(f"📭 **No active video chats globally.**\n\n{POWERED_BY}")
-
-    all_clones = await clonebotdb.find({}).to_list(length=None)
-    clone_chat_ids = set()
-    for clone in all_clones:
-        bot_id = clone.get("bot_id")
-        if bot_id:
-            try:
-                served = await get_served_chats_clone(bot_id)
-                for c in served:
-                    clone_chat_ids.add(int(c["chat_id"]))
-            except: continue
-    
-    main_bot_chats = []
-    for cid in raw_active_chats:
+@app.on_message(filters.command(["activev", "activevideo","vvc"]) & SUDOERS)
+async def activevi_(_, message: Message):
+    mystic = await message.reply_text("» ɢᴇᴛᴛɪɴɢ ᴀᴄᴛɪᴠᴇ ᴠɪᴅᴇᴏ ᴄʜᴀᴛs ʟɪsᴛ...")
+    served_chats = await get_active_video_chats()
+    text = ""
+    j = 0
+    for x in served_chats:
         try:
-            if int(cid) not in clone_chat_ids:
-                main_bot_chats.append(int(cid))
-        except: continue
-            
-    if not main_bot_chats:
-        return await mystic.edit_text(f"📭 **Main Bot has no active video chats right now.**\n\n{POWERED_BY}")
-
-    text, j = "📹 **Main Bot Active Video Chats:**\n\n", 0
-    for chat_id in main_bot_chats:
+            title = (await app.get_chat(x)).title
+        except:
+            await remove_active_video_chat(x)
+            continue
         try:
-            chat = await app.get_chat(chat_id)
-            link = await get_chat_link(chat_id)
-            text += f"**{j + 1}.** [{unidecode(chat.title)[:25]}]({link}) `[{chat_id}]`\n"
+            if (await app.get_chat(x)).username:
+                user = (await app.get_chat(x)).username
+                text += f"<b>{j + 1}.</b> <a href=https://t.me/{user}>{unidecode(title).upper()}</a> [<code>{x}</code>]\n"
+            else:
+                text += (
+                    f"<b>{j + 1}.</b> {unidecode(title).upper()} [<code>{x}</code>]\n"
+                )
             j += 1
-        except: continue
-    await mystic.edit_text(f"{text}\n{POWERED_BY}", disable_web_page_preview=True)
+        except:
+            continue
+    if not text:
+        await mystic.edit_text(f"» ɴᴏ ᴀᴄᴛɪᴠᴇ ᴠɪᴅᴇᴏ ᴄʜᴀᴛs ᴏɴ {app.mention}.")
+    else:
+        await mystic.edit_text(
+            f"<b>» ʟɪsᴛ ᴏғ ᴄᴜʀʀᴇɴᴛʟʏ ᴀᴄᴛɪᴠᴇ ᴠɪᴅᴇᴏ ᴄʜᴀᴛs :</b>\n\n{text}",
+            disable_web_page_preview=True,
+        )
+
+@app.on_message(filters.command(["ac","av"]) & SUDOERS)
+async def start(client: Client, message: Message):
+    ac_audio = str(len(await get_active_chats()))
+    ac_video = str(len(await get_active_video_chats()))
+    await message.reply_text(f"✫ <b><u>ᴀᴄᴛɪᴠᴇ ᴄʜᴀᴛs ɪɴғᴏ</u></b> :\n\nᴠᴏɪᴄᴇ : {ac_audio}\nᴠɪᴅᴇᴏ  : {ac_video}", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('✯ ᴄʟᴏsᴇ ✯', callback_data=f"close")]]))
 
 
 # ===================================================
@@ -533,3 +525,4 @@ async def total_vc_chats(_, message: Message):
         f"{POWERED_BY}"
     )
     await message.reply_text(text)
+        
