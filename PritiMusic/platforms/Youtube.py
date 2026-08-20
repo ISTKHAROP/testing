@@ -2,23 +2,22 @@ import asyncio
 import os
 import re
 import time
-import logging
-import aiohttp
 import yt_dlp
+import aiohttp
+import logging
+import config  
 from typing import Union
 from pyrogram.enums import MessageEntityType
 from pyrogram.types import Message
 from youtubesearchpython.__future__ import VideosSearch, Playlist
 
-import config  
-
 # ----------------- CONFIGURATION -----------------
 DOWNLOAD_DIR = "downloads"
 LOGGER = logging.getLogger(__name__)
 
-# 🟢 Primary API (BabyAPI)
-BASE_URL = os.getenv("BASE_URL", "https://BabyAPI.Pro")
-API_KEY = os.getenv("API_KEY", "BABYXF_A21A8972FB93C05268D88BFB7668B560FBA966A9")
+# 🟢 Primary API (Shruti - Promoted after removing Inflex)
+SHRUTI_API_URL = os.environ.get("SHRUTI_API_URL", "https://shrutibots.site")
+SHRUTI_API_KEY = os.environ.get("SHRUTI_API_KEY", "ShrutiBotsJhHL3aUrpEitMoWFoO6a")
 
 def time_to_seconds(time_str):
     stringt = str(time_str)
@@ -46,13 +45,13 @@ async def _async_run(func, *args, **kwargs):
 
 # ----------------- DOWNLOADERS -----------------
 
-# Direct BabyAPI Downloader Function
-async def baby_api_download(video_id: str, download_type: str, title: str = None) -> str:
-    if not BASE_URL or not API_KEY:
+# Unified Downloader Function for Fast & Smooth API switching
+async def external_api_download(api_url: str, api_key: str, video_id: str, download_type: str, title: str = None, api_name: str = "API") -> str:
+    if not api_url or not api_key:
         return None
 
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
-    filename = get_safe_filename(title, f"baby_{video_id}")
+    filename = get_safe_filename(title, f"{api_name[:3]}_{video_id}")
     ext = "mp4" if download_type == "video" else "mp3"
     file_path = os.path.join(DOWNLOAD_DIR, f"{filename}.{ext}")
 
@@ -64,16 +63,15 @@ async def baby_api_download(video_id: str, download_type: str, title: str = None
             params = {
                 "url": video_id, 
                 "type": "audio" if download_type == "audio" else "video", 
-                "api_key": API_KEY
+                "api_key": api_key
             }
-            clean_url = BASE_URL.rstrip('/')
             async with session.get(
-                f"{clean_url}/download",
+                f"{api_url}/download",
                 params=params,
                 timeout=aiohttp.ClientTimeout(total=600)
             ) as resp:
                 if resp.status != 200:
-                    LOGGER.error(f"🔴 BabyAPI Error: Status {resp.status}")
+                    LOGGER.error(f"🔴 {api_name} Error: Status {resp.status}")
                     return None
 
                 with open(file_path, "wb") as f:
@@ -81,13 +79,13 @@ async def baby_api_download(video_id: str, download_type: str, title: str = None
                         f.write(chunk)
 
         if os.path.exists(file_path) and os.path.getsize(file_path) > 50000:
-            LOGGER.info(f"🟢 SUCCESS: Downloaded '{title}' via BabyAPI!")
+            LOGGER.info(f"🟢 SOURCE-HOPPING SUCCESS: Downloaded '{title}' from {api_name}!")
             return file_path
         else:
-            LOGGER.warning(f"🔴 BabyAPI returned corrupted/empty file for '{title}'.")
+            LOGGER.warning(f"🔴 {api_name} returned corrupted/empty file for '{title}'. Rejecting it.")
             return None
     except Exception as e:
-        LOGGER.error(f"BabyAPI Download Error: {e}")
+        LOGGER.error(f"{api_name} Download Error: {e}")
         if os.path.exists(file_path):
             try: os.remove(file_path)
             except: pass
@@ -105,6 +103,7 @@ async def ytdl_fallback_download(link: str, download_type: str, title: str = Non
 
     video_format = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
 
+    # Removed cookies.txt
     ydl_opts = {
         'format': video_format if download_type == "video" else 'bestaudio/best', 
         'outtmpl': file_path,
@@ -126,12 +125,98 @@ async def ytdl_fallback_download(link: str, download_type: str, title: str = Non
     try:
         await _async_run(yt_dlp.YoutubeDL(ydl_opts).download, [link])
         if os.path.exists(file_path) and os.path.getsize(file_path) > 50000:
-            LOGGER.info(f"🟢 FALLBACK SUCCESS: Downloaded '{title}' from yt-dlp!")
+            LOGGER.info(f"🟢 SOURCE-HOPPING SUCCESS: Downloaded '{title}' from yt-dlp!")
             return file_path
         return None
     except Exception as e:
         LOGGER.error(f"yt-dlp fallback error: {str(e)}")
         return None
+
+async def spotify_fallback_download(title: str) -> str:
+    if not title: return None
+    os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+    clean_title = re.sub(r'\(.*?\)|\[.*?\]|official|video|audio|lyric', '', title, flags=re.IGNORECASE).strip()
+    filename = get_safe_filename(clean_title, f"sp_{int(time.time())}")
+    file_path = os.path.join(DOWNLOAD_DIR, f"{filename}.mp3")
+
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
+            api_url = f"https://api.spotifydown.com/search?q={clean_title}" 
+            async with session.get(api_url) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    if data.get("success") and data.get("tracks"):
+                        best_track_url = data["tracks"][0].get("downloadUrl") 
+                        if best_track_url:
+                            async with session.get(best_track_url) as song_resp:
+                                if song_resp.status == 200:
+                                    with open(file_path, "wb") as f:
+                                        async for chunk in song_resp.content.iter_chunked(131072):
+                                            f.write(chunk)
+                                    if os.path.exists(file_path) and os.path.getsize(file_path) > 50000:
+                                        LOGGER.info(f"🟢 SOURCE-HOPPING SUCCESS: Downloaded '{clean_title}' from Spotify!")
+                                        return file_path
+    except Exception as e:
+        LOGGER.error(f"Spotify fallback error: {str(e)}")
+    return None
+
+async def jiosaavn_fallback_download(title: str) -> str:
+    if not title: return None
+    os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+    clean_title = re.sub(r'\(.*?\)|\[.*?\]|official|video|audio|lyric', '', title, flags=re.IGNORECASE).strip()
+    filename = get_safe_filename(clean_title, f"js_{int(time.time())}")
+    file_path = os.path.join(DOWNLOAD_DIR, f"{filename}.mp3")
+
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
+            async with session.get(f"{getattr(config, 'JIOSAAVN_API', 'https://saavn.dev/api/search/songs?query=')}{clean_title}") as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    if data.get("success") and data.get("data", {}).get("results"):
+                        song_data = data["data"]["results"][0]
+                        download_urls = song_data.get("downloadUrl", [])
+                        if download_urls:
+                            best_url = download_urls[-1]["url"]
+                            async with session.get(best_url) as song_resp:
+                                if song_resp.status == 200:
+                                    with open(file_path, "wb") as f:
+                                        async for chunk in song_resp.content.iter_chunked(131072):
+                                            f.write(chunk)
+                                    if os.path.exists(file_path) and os.path.getsize(file_path) > 50000:
+                                        LOGGER.info(f"🟢 SOURCE-HOPPING SUCCESS: Downloaded '{clean_title}' from JioSaavn!")
+                                        return file_path
+    except Exception as e:
+        LOGGER.error(f"JioSaavn fallback error: {str(e)}")
+    return None
+
+async def soundcloud_fallback_download(title: str) -> str:
+    if not title: return None
+    os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+    clean_title = re.sub(r'\(.*?\)|\[.*?\]|official|video|audio|lyric', '', title, flags=re.IGNORECASE).strip()
+    filename = get_safe_filename(clean_title, f"sc_{int(time.time())}")
+    file_path = os.path.join(DOWNLOAD_DIR, f"{filename}.mp3")
+
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'outtmpl': file_path,
+        'quiet': True,
+        'no_warnings': True,
+        'noplaylist': True,
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }]
+    }
+    try:
+        search_query = f"scsearch1:{clean_title}"
+        await _async_run(yt_dlp.YoutubeDL(ydl_opts).download, [search_query])
+        if os.path.exists(file_path) and os.path.getsize(file_path) > 50000:
+            LOGGER.info(f"🟢 SOURCE-HOPPING SUCCESS: Downloaded '{clean_title}' from SoundCloud!")
+            return file_path
+    except Exception as e:
+        LOGGER.error(f"SoundCloud fallback error: {str(e)}")
+    return None
 
 async def download_song(link: str, title: str = None) -> str:
     video_id = extract_video_id(link)
@@ -144,13 +229,30 @@ async def download_song(link: str, title: str = None) -> str:
             if res and res.get("result"): title = res["result"][0]["title"]
         except Exception: pass
 
-    # Primary: BabyAPI
-    baby_res = await baby_api_download(video_id, "audio", title)
-    if baby_res: return baby_res
+    # 1. Primary API (Shruti)
+    shruti_result = await external_api_download(SHRUTI_API_URL, SHRUTI_API_KEY, video_id, "audio", title, "Shruti")
+    if shruti_result: return shruti_result
 
-    # Secondary Fallback: yt-dlp
-    LOGGER.warning(f"🔴 BabyAPI failed for '{title}'. Falling back to yt-dlp...")
-    return await ytdl_fallback_download(link, "audio", title)
+    LOGGER.warning(f"🔴 Shruti API failed for '{title}'. Hopping to yt-dlp...")
+
+    # 2. yt-dlp Fallback
+    yt_result = await ytdl_fallback_download(link, "audio", title)
+    if yt_result: return yt_result
+
+    if title:
+        LOGGER.warning(f"🔴 YouTube blocked '{title}'. Hopping to Spotify...")
+        sp_result = await spotify_fallback_download(title)
+        if sp_result: return sp_result
+
+        LOGGER.warning(f"🔴 Spotify failed. Hopping to JioSaavn...")
+        js_result = await jiosaavn_fallback_download(title)
+        if js_result: return js_result
+
+        LOGGER.warning(f"🔴 JioSaavn failed. Hopping to SoundCloud...")
+        sc_result = await soundcloud_fallback_download(title)
+        if sc_result: return sc_result
+
+    return None
 
 async def download_video(link: str, title: str = None) -> str:
     video_id = extract_video_id(link)
@@ -163,12 +265,13 @@ async def download_video(link: str, title: str = None) -> str:
             if res and res.get("result"): title = res["result"][0]["title"]
         except: pass
 
-    # Primary: BabyAPI
-    baby_res = await baby_api_download(video_id, "video", title)
-    if baby_res: return baby_res
+    # 1. Primary API (Shruti)
+    shruti_result = await external_api_download(SHRUTI_API_URL, SHRUTI_API_KEY, video_id, "video", title, "Shruti")
+    if shruti_result: return shruti_result
 
-    # Secondary Fallback: yt-dlp
-    LOGGER.warning(f"🔴 BabyAPI failed for '{title}'. Falling back to yt-dlp...")
+    LOGGER.warning(f"🔴 Shruti API failed for '{title}'. Hopping to yt-dlp...")
+
+    # 2. yt-dlp Fallback
     return await ytdl_fallback_download(link, "video", title)
 # ----------------- YOUTUBE API CLASS -----------------
 
@@ -219,6 +322,7 @@ class YouTubeAPI:
             pass
 
         try:
+            # Removed cookies.txt
             ydl_opts = {
                 "quiet": True, 
                 "extract_flat": True, 
@@ -264,6 +368,7 @@ class YouTubeAPI:
             return "0:00"
 
     async def thumbnail(self, link: str, videoid: Union[bool, str] = None):
+        # Capturing raw video id to prevent missing thumbs on clone bots
         vid_id_str = link if videoid else extract_video_id(link)
         if videoid: link = self.base + link
         if "&" in link: link = link.split("&")[0]
@@ -272,6 +377,7 @@ class YouTubeAPI:
             for result in (await results.next())["result"]:
                 return result["thumbnails"][0]["url"].split("?")[0]
         except Exception:
+            # Replaced hardcoded telegra.ph broken thumbnail with a dynamic YouTube one
             if vid_id_str and len(vid_id_str) > 5:
                 return f"https://img.youtube.com/vi/{vid_id_str}/hqdefault.jpg"
             return "https://telegra.ph/file/2e3d368e77c449c287430.jpg"
@@ -323,6 +429,7 @@ class YouTubeAPI:
             pass
 
         try:
+            # Removed cookies.txt
             ydl_opts = {
                 "quiet": True, 
                 "extract_flat": True, 
@@ -356,6 +463,7 @@ class YouTubeAPI:
         if videoid: link = self.base + link
         if "&" in link: link = link.split("&")[0]
 
+        # Removed cookies.txt
         ytdl_opts = {
             "quiet": True,
             "extractor_args": {"youtube": ["player_client=ios,tv_embedded"]},
@@ -401,6 +509,7 @@ class YouTubeAPI:
             result = (await a.next()).get("result")
             return result[query_type]["title"], result[query_type]["duration"], result[query_type]["thumbnails"][0]["url"].split("?")[0], result[query_type]["id"]
         except Exception:
+            # Clone bot fallback fix
             fallback_thumb = f"https://img.youtube.com/vi/{raw_vid_str}/hqdefault.jpg" if raw_vid_str and len(raw_vid_str) > 5 else "https://telegra.ph/file/2e3d368e77c449c287430.jpg"
             return "Unknown Title", "0:00", fallback_thumb, "None"
 
@@ -457,13 +566,14 @@ class YouTubeAPI:
             except Exception: pass 
 
             if not valid_choices:
-                ydl_opts = {
+                # Removed cookies.txt
+                ytdl_opts = {
                     "quiet": True, 
                     "extract_flat": True, 
                     "noplaylist": True,
                     "extractor_args": {"youtube": ["player_client=ios,tv_embedded"]} 
                 } 
-                ydl = yt_dlp.YoutubeDL(ydl_opts)
+                ydl = yt_dlp.YoutubeDL(ytdl_opts)
 
                 r = await _async_run(ydl.extract_info, f"ytsearch10:{search_query}", download=False)
                 if r and "entries" in r:
