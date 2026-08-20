@@ -3,35 +3,32 @@ import os
 import re
 import time
 import logging
-from typing import Union
-
 import aiohttp
 import yt_dlp
+from typing import Union
 from pyrogram.enums import MessageEntityType
 from pyrogram.types import Message
 from youtubesearchpython.__future__ import VideosSearch, Playlist
 
-import config  # Config module load karne ke liye
+import config  
 
 # ----------------- CONFIGURATION -----------------
 DOWNLOAD_DIR = "downloads"
 LOGGER = logging.getLogger(__name__)
 
-# 🟢 Primary API Configuration (BabyAPI Setup)
-BASE_URL = os.environ.get("BASE_URL", getattr(config, "BASE_URL", "https://BabyAPI.Pro"))
-API_KEY = os.environ.get("API_KEY", getattr(config, "API_KEY", "BABYXF_A21A8972FB93C05268D88BFB7668B560FBA966A9"))
-
+# 🟢 Primary API (BabyAPI - Replacing Shruti)
+BASE_URL = os.getenv("BASE_URL", "https://BabyAPI.Pro")
+# Note: Added quotes around the API key string to prevent syntax errors
+API_KEY = os.getenv("API_KEY", "BABYXF_A21A8972FB93C05268D88BFB7668B560FBA966A9")
 
 def time_to_seconds(time_str):
     stringt = str(time_str)
     return sum(int(x) * 60 ** i for i, x in enumerate(reversed(stringt.split(":"))))
 
-
 def get_safe_filename(title: str, default_id: str) -> str:
     if not title:
         return default_id
     return re.sub(r'[\\/*?:"<>|]', "", title).strip()
-
 
 def extract_video_id(link: str) -> str:
     if "youtu.be/" in link:
@@ -39,7 +36,6 @@ def extract_video_id(link: str) -> str:
     elif "v=" in link:
         return link.split("v=")[1].split("&")[0]
     return link
-
 
 # Helper for Safe Async Execution
 async def _async_run(func, *args, **kwargs):
@@ -49,10 +45,9 @@ async def _async_run(func, *args, **kwargs):
         loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, lambda: func(*args, **kwargs))
 
-
 # ----------------- DOWNLOADERS -----------------
 
-# Unified Downloader Function configured for BabyAPI
+# Unified Downloader Function for Fast & Smooth API switching (Configured for BabyAPI)
 async def external_api_download(api_url: str, api_key: str, video_id: str, download_type: str, title: str = None, api_name: str = "BabyAPI") -> str:
     if not api_url or not api_key:
         return None
@@ -72,8 +67,10 @@ async def external_api_download(api_url: str, api_key: str, video_id: str, downl
                 "type": "audio" if download_type == "audio" else "video", 
                 "api_key": api_key
             }
+            # Clean base url to avoid double slashes
+            clean_url = api_url.rstrip('/')
             async with session.get(
-                f"{api_url.rstrip('/')}/download",
+                f"{clean_url}/download",
                 params=params,
                 timeout=aiohttp.ClientTimeout(total=600)
             ) as resp:
@@ -94,12 +91,9 @@ async def external_api_download(api_url: str, api_key: str, video_id: str, downl
     except Exception as e:
         LOGGER.error(f"{api_name} Download Error: {e}")
         if os.path.exists(file_path):
-            try:
-                os.remove(file_path)
-            except Exception:
-                pass
+            try: os.remove(file_path)
+            except: pass
         return None
-
 
 async def ytdl_fallback_download(link: str, download_type: str, title: str = None) -> str:
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
@@ -141,10 +135,8 @@ async def ytdl_fallback_download(link: str, download_type: str, title: str = Non
         LOGGER.error(f"yt-dlp fallback error: {str(e)}")
         return None
 
-
 async def spotify_fallback_download(title: str) -> str:
-    if not title:
-        return None
+    if not title: return None
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
     clean_title = re.sub(r'\(.*?\)|\[.*?\]|official|video|audio|lyric', '', title, flags=re.IGNORECASE).strip()
     filename = get_safe_filename(clean_title, f"sp_{int(time.time())}")
@@ -171,10 +163,8 @@ async def spotify_fallback_download(title: str) -> str:
         LOGGER.error(f"Spotify fallback error: {str(e)}")
     return None
 
-
 async def jiosaavn_fallback_download(title: str) -> str:
-    if not title:
-        return None
+    if not title: return None
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
     clean_title = re.sub(r'\(.*?\)|\[.*?\]|official|video|audio|lyric', '', title, flags=re.IGNORECASE).strip()
     filename = get_safe_filename(clean_title, f"js_{int(time.time())}")
@@ -182,8 +172,7 @@ async def jiosaavn_fallback_download(title: str) -> str:
 
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
-            saavn_api = getattr(config, 'JIOSAAVN_API', 'https://saavn.dev/api/search/songs?query=')
-            async with session.get(f"{saavn_api}{clean_title}") as resp:
+            async with session.get(f"{getattr(config, 'JIOSAAVN_API', 'https://saavn.dev/api/search/songs?query=')}{clean_title}") as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     if data.get("success") and data.get("data", {}).get("results"):
@@ -203,10 +192,8 @@ async def jiosaavn_fallback_download(title: str) -> str:
         LOGGER.error(f"JioSaavn fallback error: {str(e)}")
     return None
 
-
 async def soundcloud_fallback_download(title: str) -> str:
-    if not title:
-        return None
+    if not title: return None
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
     clean_title = re.sub(r'\(.*?\)|\[.*?\]|official|video|audio|lyric', '', title, flags=re.IGNORECASE).strip()
     filename = get_safe_filename(clean_title, f"sc_{int(time.time())}")
@@ -234,75 +221,62 @@ async def soundcloud_fallback_download(title: str) -> str:
         LOGGER.error(f"SoundCloud fallback error: {str(e)}")
     return None
 
-
 async def download_song(link: str, title: str = None) -> str:
     video_id = extract_video_id(link)
-    if not video_id or len(video_id) < 3:
-        return None
+    if not video_id or len(video_id) < 3: return None
 
     if not title:
         try:
             search = VideosSearch(video_id, limit=1)
             res = await search.next()
-            if res and res.get("result"):
-                title = res["result"][0]["title"]
-        except Exception:
-            pass
+            if res and res.get("result"): title = res["result"][0]["title"]
+        except Exception: pass
 
     # 1. Primary API (BabyAPI)
-    baby_result = await external_api_download(BASE_URL, API_KEY, video_id, "audio", title, "BabyAPI")
-    if baby_result:
-        return baby_result
+    api_result = await external_api_download(BASE_URL, API_KEY, video_id, "audio", title, "BabyAPI")
+    if api_result: return api_result
 
     LOGGER.warning(f"🔴 BabyAPI failed for '{title}'. Hopping to yt-dlp...")
 
     # 2. yt-dlp Fallback
     yt_result = await ytdl_fallback_download(link, "audio", title)
-    if yt_result:
-        return yt_result
+    if yt_result: return yt_result
 
     if title:
         LOGGER.warning(f"🔴 YouTube blocked '{title}'. Hopping to Spotify...")
         sp_result = await spotify_fallback_download(title)
-        if sp_result:
-            return sp_result
+        if sp_result: return sp_result
 
         LOGGER.warning(f"🔴 Spotify failed. Hopping to JioSaavn...")
         js_result = await jiosaavn_fallback_download(title)
-        if js_result:
-            return js_result
+        if js_result: return js_result
 
         LOGGER.warning(f"🔴 JioSaavn failed. Hopping to SoundCloud...")
         sc_result = await soundcloud_fallback_download(title)
-        if sc_result:
-            return sc_result
+        if sc_result: return sc_result
 
     return None
 
-
 async def download_video(link: str, title: str = None) -> str:
     video_id = extract_video_id(link)
-    if not video_id or len(video_id) < 3:
-        return None
+    if not video_id or len(video_id) < 3: return None
 
     if not title:
         try:
             search = VideosSearch(video_id, limit=1)
             res = await search.next()
-            if res and res.get("result"):
-                title = res["result"][0]["title"]
-        except Exception:
-            pass
+            if res and res.get("result"): title = res["result"][0]["title"]
+        except: pass
 
     # 1. Primary API (BabyAPI)
-    baby_result = await external_api_download(BASE_URL, API_KEY, video_id, "video", title, "BabyAPI")
-    if baby_result:
-        return baby_result
+    api_result = await external_api_download(BASE_URL, API_KEY, video_id, "video", title, "BabyAPI")
+    if api_result: return api_result
 
     LOGGER.warning(f"🔴 BabyAPI failed for '{title}'. Hopping to yt-dlp...")
 
     # 2. yt-dlp Fallback
     return await ytdl_fallback_download(link, "video", title)
+
 # ----------------- YOUTUBE API CLASS -----------------
 
 class YouTubeAPI:
@@ -314,8 +288,7 @@ class YouTubeAPI:
         self.reg = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
     async def exists(self, link: str, videoid: Union[bool, str] = None):
-        if videoid:
-            link = self.base + link
+        if videoid: link = self.base + link
         return bool(re.search(self.regex, link))
 
     async def url(self, message_1: Message) -> Union[str, None]:
@@ -335,10 +308,8 @@ class YouTubeAPI:
         return None
 
     async def details(self, link: str, videoid: Union[bool, str] = None):
-        if videoid:
-            link = self.base + link
-        if "&" in link:
-            link = link.split("&")[0]
+        if videoid: link = self.base + link
+        if "&" in link: link = link.split("&")[0]
 
         try:
             results = VideosSearch(link, limit=1)
@@ -380,10 +351,8 @@ class YouTubeAPI:
         return None, None, None, None, None
 
     async def title(self, link: str, videoid: Union[bool, str] = None):
-        if videoid:
-            link = self.base + link
-        if "&" in link:
-            link = link.split("&")[0]
+        if videoid: link = self.base + link
+        if "&" in link: link = link.split("&")[0]
         try:
             results = VideosSearch(link, limit=1)
             for result in (await results.next())["result"]:
@@ -392,10 +361,8 @@ class YouTubeAPI:
             return "Unknown Title"
 
     async def duration(self, link: str, videoid: Union[bool, str] = None):
-        if videoid:
-            link = self.base + link
-        if "&" in link:
-            link = link.split("&")[0]
+        if videoid: link = self.base + link
+        if "&" in link: link = link.split("&")[0]
         try:
             results = VideosSearch(link, limit=1)
             for result in (await results.next())["result"]:
@@ -405,10 +372,8 @@ class YouTubeAPI:
 
     async def thumbnail(self, link: str, videoid: Union[bool, str] = None):
         vid_id_str = link if videoid else extract_video_id(link)
-        if videoid:
-            link = self.base + link
-        if "&" in link:
-            link = link.split("&")[0]
+        if videoid: link = self.base + link
+        if "&" in link: link = link.split("&")[0]
         try:
             results = VideosSearch(link, limit=1)
             for result in (await results.next())["result"]:
@@ -419,10 +384,8 @@ class YouTubeAPI:
             return "https://telegra.ph/file/2e3d368e77c449c287430.jpg"
 
     async def video(self, link: str, videoid: Union[bool, str] = None):
-        if videoid:
-            link = self.base + link
-        if "&" in link:
-            link = link.split("&")[0]
+        if videoid: link = self.base + link
+        if "&" in link: link = link.split("&")[0]
         try:
             downloaded_file = await download_video(link)
             if downloaded_file:
@@ -432,10 +395,8 @@ class YouTubeAPI:
             return 0, f"Video download error: {e}"
 
     async def playlist(self, link, limit, user_id, videoid: Union[bool, str] = None):
-        if videoid:
-            link = self.listbase + link
-        if "&" in link:
-            link = link.split("&")[0]
+        if videoid: link = self.listbase + link
+        if "&" in link: link = link.split("&")[0]
         try:
             plist = await _async_run(Playlist.get, link)
         except Exception:
@@ -443,19 +404,15 @@ class YouTubeAPI:
         videos = plist.get("videos") or []
         ids = []
         for data in videos[:limit]:
-            if not data:
-                continue
+            if not data: continue
             vid = data.get("id")
-            if not vid:
-                continue
+            if not vid: continue
             ids.append(vid)
         return ids
 
     async def track(self, link: str, videoid: Union[bool, str] = None):
-        if videoid:
-            link = self.base + link
-        if "&" in link:
-            link = link.split("&")[0]
+        if videoid: link = self.base + link
+        if "&" in link: link = link.split("&")[0]
 
         try:
             results = VideosSearch(link, limit=1)
@@ -503,10 +460,8 @@ class YouTubeAPI:
         return None, None
 
     async def formats(self, link: str, videoid: Union[bool, str] = None):
-        if videoid:
-            link = self.base + link
-        if "&" in link:
-            link = link.split("&")[0]
+        if videoid: link = self.base + link
+        if "&" in link: link = link.split("&")[0]
 
         ytdl_opts = {
             "quiet": True,
@@ -537,8 +492,7 @@ class YouTubeAPI:
                                 "format_note": format.get("format_note"),
                                 "yturl": link,
                             })
-                    except Exception:
-                        continue
+                    except Exception: continue
         except Exception:
             pass
 
@@ -546,10 +500,8 @@ class YouTubeAPI:
 
     async def slider(self, link: str, query_type: int, videoid: Union[bool, str] = None):
         raw_vid_str = link if videoid else extract_video_id(link)
-        if videoid:
-            link = self.base + link
-        if "&" in link:
-            link = link.split("&")[0]
+        if videoid: link = self.base + link
+        if "&" in link: link = link.split("&")[0]
 
         try:
             a = VideosSearch(link, limit=10)
@@ -564,18 +516,14 @@ class YouTubeAPI:
         songaudio: Union[bool, str] = None, songvideo: Union[bool, str] = None, format_id: Union[bool, str] = None,
         title: Union[bool, str] = None,
     ) -> str:
-        if videoid:
-            link = self.base + link
+        if videoid: link = self.base + link
         try:
             file_title = title if isinstance(title, str) else None
 
-            if video:
-                downloaded_file = await download_video(link, title=file_title)
-            else:
-                downloaded_file = await download_song(link, title=file_title)
+            if video: downloaded_file = await download_video(link, title=file_title)
+            else: downloaded_file = await download_song(link, title=file_title)
 
-            if downloaded_file:
-                return downloaded_file, True
+            if downloaded_file: return downloaded_file, True
             return None, False
         except Exception as e:
             LOGGER.error(f"Error in YouTubeAPI.download: {e}")
@@ -593,25 +541,19 @@ class YouTubeAPI:
                 if result and result.get("result"):
                     for res in result["result"]:
                         vidid = str(res.get("id") or "")
-                        if not vidid or vidid == "None" or vidid == last_vidid:
-                            continue
+                        if not vidid or vidid == "None" or vidid == last_vidid: continue
 
                         dur_str = str(res.get("duration", "0:00"))
                         dur_sec = 0
                         if dur_str and ":" in dur_str:
                             parts = dur_str.split(":")
                             try:
-                                if len(parts) == 2:
-                                    dur_sec = int(parts[0]) * 60 + int(parts[1])
-                                elif len(parts) == 3:
-                                    dur_sec = int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
-                            except ValueError:
-                                pass
+                                if len(parts) == 2: dur_sec = int(parts[0]) * 60 + int(parts[1])
+                                elif len(parts) == 3: dur_sec = int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+                            except ValueError: pass
 
-                        if dur_sec < 30:
-                            continue
-                        if max_duration and dur_sec > max_duration:
-                            continue
+                        if dur_sec < 30: continue
+                        if max_duration and dur_sec > max_duration: continue
 
                         valid_choices.append({
                             "vidid": vidid,
@@ -619,8 +561,7 @@ class YouTubeAPI:
                             "duration_min": dur_str,
                             "duration_sec": dur_sec
                         })
-            except Exception:
-                pass 
+            except Exception: pass 
 
             if not valid_choices:
                 ydl_opts = {
@@ -635,19 +576,14 @@ class YouTubeAPI:
                 if r and "entries" in r:
                     for entry in r["entries"]:
                         vidid = entry.get("id")
-                        if not vidid or vidid == last_vidid:
-                            continue
+                        if not vidid or vidid == last_vidid: continue
 
                         raw_dur = entry.get("duration", 0)
-                        try:
-                            dur_sec = int(float(raw_dur)) if raw_dur else 0
-                        except (ValueError, TypeError):
-                            dur_sec = 0
+                        try: dur_sec = int(float(raw_dur)) if raw_dur else 0
+                        except (ValueError, TypeError): dur_sec = 0
 
-                        if not dur_sec or dur_sec < 30:
-                            continue
-                        if max_duration and dur_sec > max_duration:
-                            continue
+                        if not dur_sec or dur_sec < 30: continue
+                        if max_duration and dur_sec > max_duration: continue
 
                         m, s = divmod(dur_sec, 60)
                         h, m = divmod(m, 60)
@@ -660,8 +596,7 @@ class YouTubeAPI:
                             "duration_sec": dur_sec
                         })
 
-            if valid_choices:
-                return random.choice(valid_choices)
+            if valid_choices: return random.choice(valid_choices)
             return None
 
         except Exception as e:
@@ -669,5 +604,4 @@ class YouTubeAPI:
             return None
 
 
-# Global Instance Initialization
 YouTube = YouTubeAPI()
